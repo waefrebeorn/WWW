@@ -2,7 +2,8 @@
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
 LUA_SRC := $(filter-out %/lua.c %/onelua.c %/ltests.c,$(wildcard thirdparty/lua5.4/*.c))
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c
+SCRIPT_SRC := src/lua/wb_script.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
 TARGET  := build/wubu_engine.exe
@@ -14,14 +15,14 @@ all: $(TARGET)
 build:
 	mkdir -p build
 
-$(TARGET): build $(CORE_SRC) $(HOST_SRC) $(LUA_SRC)
-	$(CC) $(CFLAGS) $(CORE_SRC) $(HOST_SRC) $(LUA_SRC) -o $@ -lm
+$(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_SRC)
+	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_SRC) -o $@ -lm
 
 run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render
+test: test-ecs test-spatial test-tiles test-render test-exp
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -42,6 +43,11 @@ TEST_RENDER := build/wb_render_test.exe
 test-render: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_render.c tests/wb_render_test.c -o $(TEST_RENDER) -lm
 	./$(TEST_RENDER)
+
+TEST_EXP := build/wb_exp_test.exe
+test-exp: build
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_SRC) -o $(TEST_EXP) -lm
+	./$(TEST_EXP)
 
 clean:
 	rm -rf build
