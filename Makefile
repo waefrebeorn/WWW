@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -48,6 +48,17 @@ TEST_EXP := build/wb_exp_test.exe
 test-exp: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_SRC) -o $(TEST_EXP) -lm
 	./$(TEST_EXP)
+
+# test-lv: the slerm-Lua interpreter (two harnesses)
+TEST_LV  := build/wb_lv_test.exe
+TEST_LVS := build/wb_lv_script_test.exe
+test-lv: test-lv-core test-lv-script
+test-lv-core: build
+	$(CC) $(CFLAGS) -Isrc/lv src/lv/wb_lv.c tests/wb_lv_test.c -o $(TEST_LV) -lm
+	./$(TEST_LV)
+test-lv-script: build
+	$(CC) $(CFLAGS) -Isrc/lv src/lv/wb_lv.c tests/wb_lv_script_test.c -o $(TEST_LVS) -lm
+	./$(TEST_LVS)
 
 clean:
 	rm -rf build
