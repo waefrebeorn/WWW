@@ -2,7 +2,7 @@
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
 LUA_SRC := $(filter-out %/lua.c %/onelua.c %/ltests.c,$(wildcard thirdparty/lua5.4/*.c))
-CORE_SRC := src/core/wb_ecs.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
 TARGET  := build/wubu_engine.exe
@@ -20,11 +20,18 @@ $(TARGET): build $(CORE_SRC) $(HOST_SRC) $(LUA_SRC)
 run: $(TARGET)
 	./$(TARGET) games/main.lua
 
-# test: build the ECS core standalone (no Lua host/main) + run the harness
-TEST_TGT := build/wb_test.exe
-test: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_ecs.c tests/wb_test.c -o $(TEST_TGT)
-	./$(TEST_TGT)
+# test: build each core module standalone (no Lua host/main) + run its harness
+test: test-ecs test-spatial
+
+TEST_ECS := build/wb_test.exe
+test-ecs: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_ecs.c tests/wb_test.c -o $(TEST_ECS)
+	./$(TEST_ECS)
+
+TEST_SPATIAL := build/wb_spatial_test.exe
+test-spatial: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_spatial.c tests/wb_spatial_test.c -o $(TEST_SPATIAL) -lm
+	./$(TEST_SPATIAL)
 
 clean:
 	rm -rf build
