@@ -117,7 +117,8 @@ static wb_tile_seat *evict_oldest(wb_tile_store *s) {
     wb_tile_seat *victim = NULL;
     for (uint32_t i = 0; i < s->cap; i++) {
         wb_tile_seat *seat = s->slots[i];
-        if (!seat || seat->state != WB_TILE_READY) continue;
+        if (!seat || seat == TOMBSTONE || seat->state != WB_TILE_READY)
+            continue;
         if (!victim || seat->age < victim->age) victim = seat;
     }
     return victim;

@@ -7,7 +7,7 @@ HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
 TARGET  := build/wubu_engine.exe
 
-.PHONY: all clean run test
+.PHONY: all clean run test demo
 
 all: $(TARGET)
 
@@ -40,3 +40,9 @@ test-tiles: build
 
 clean:
 	rm -rf build
+
+# geo demo: the flying-camera / ambient-culling loop, C11-only
+DEMO_OBJ := build/wb_geo_demo.exe
+demo: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_spatial.c src/core/wb_tiles.c examples/wb_geo_demo.c -o $(DEMO_OBJ) -lm
+	./$(DEMO_OBJ)

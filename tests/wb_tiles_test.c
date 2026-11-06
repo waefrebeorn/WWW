@@ -93,6 +93,39 @@ int main(void) {
     CHECK(wb_tiles_get(es, ek, 0) == NULL, "error tile has no payload");
     wb_tiles_destroy(es);
 
+    /* ------------------------------------------------------------------ */
+    /* REGRESSION: sustained eviction across many frames. Multiple evictions
+     * accumulate tombstones; evict_oldest scans them. Without a tombstone
+     * guard this dereferenced the sentinel and segfaulted (caught in the
+     * geo demo). Drive a 3x3 "camera ring" across the map for many frames
+     * over a hard-seated store -- must stay resident-capped and live. */
+    {
+        wb_tile_store_cfg scfg = { .payload_size = 4, .max_resident = 9, .planes = 1 };
+        wb_tile_store *big = wb_tiles_create(&scfg);
+        src_ctx s2 = {0};
+        const uint32_t LV = 8, tx0 = 40, ty0 = 40;
+        int frames = 30;
+        for (int fr = 0; fr < frames; fr++) {
+            uint32_t tx = tx0 + fr * 2, ty = ty0 + fr * 2;
+            uint32_t side = 1u << LV;
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dx = -1; dx <= 1; dx++) {
+                int32_t nx = (int32_t)tx + dx, ny = (int32_t)ty + dy;
+                if (nx < 0 || ny < 0 || nx >= (int32_t)side || ny >= (int32_t)side) continue;
+                wb_tiles_request(big, wb_qkey_make(LV,(uint32_t)nx,(uint32_t)ny), 0, fake_height, &s2);
+            }
+            /* after every frame the seat budget must hold */
+            if (wb_tiles_resident(big) > scfg.max_resident) {
+                g_fail++; printf("FAIL: resident exceeded budget in frame %d (line %d)\n", fr, __LINE__);
+            } else g_pass++;
+        }
+        /* the focus tile of the final frame must still be resident */
+        uint32_t ftx = tx0 + (frames-1)*2, fty = ty0 + (frames-1)*2;
+        wb_qkey fok = wb_qkey_make(LV, ftx, fty);
+        CHECK(wb_tiles_get(big, fok, 0) != NULL, "sustained-ring focus still resident");
+        wb_tiles_destroy(big);
+    }
+
     /* evict specific tile */
     wb_tiles_evict(s, k1, 0);
     CHECK(wb_tiles_get(s, k1, 0) == NULL, "explicit evict removes tile");
