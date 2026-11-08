@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -98,6 +98,12 @@ TEST_ASSETS := build/wb_assets_test.exe
 test-assets: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c tests/wb_assets_test.c -o $(TEST_ASSETS) -lm
 	./$(TEST_ASSETS)
+
+# test-net: slice 13 -- server-authoritative netcode, prediction, AOI, delta
+TEST_NET := build/wb_net_test.exe
+test-net: build
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/net src/core/wb_spatial.c src/net/wb_net.c tests/wb_net_test.c -o $(TEST_NET) -lm
+	./$(TEST_NET)
 
 clean:
 	rm -rf build

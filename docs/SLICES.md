@@ -8,7 +8,7 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 9 | physics | MuJoCo 4 backend: bodies, collision, character controller, ECS binding | `make test-physics` — 27 | ✅ `7a56adf` |
 | 10 | input + camera | input state, follow camera, input→character chain, headless playable demo | `make test-character` | ✅ |
 | 11 | GPU backend | render graph + GPU backend behind the software rasterizer's geometry API | `make test-gpu` — 26 | ✅ |
-| 12 | content pipeline | glTF/GLB import → GPU-ready, content-addressed DDC, manifest | `make test-assets` | ⬜ |
+| 12 | content pipeline | glTF/GLB import → GPU-ready, content-addressed DDC, manifest | `make test-assets` — 30 | ✅ |
 | 13 | networking | authoritative server, client prediction, AOI on the quadkey | `make test-net` | ⬜ |
 | 14 | avatar + identity | glTF+VRM humanoid import, rig, cross-world identity | `make test-avatar` | ⬜ |
 | 15 | modding sandbox | untrusted-code sandbox (Luau model), mod manifest, hot reload | `make test-mod` | ⬜ |
