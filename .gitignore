@@ -4,3 +4,4 @@ build/
 *.rbxl
 .vscode/
 .idea/
+thirdparty/redot/
