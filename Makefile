@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -59,6 +59,14 @@ test-lv-core: build
 test-lv-script: build
 	$(CC) $(CFLAGS) -Isrc/lv src/lv/wb_lv.c tests/wb_lv_script_test.c -o $(TEST_LVS) -lm
 	./$(TEST_LVS)
+
+# test-physics: slice 9 -- MuJoCo-backed physics world
+MUJOCO_DIR  := thirdparty/mujoco
+TEST_PHYSICS := build/wb_physics_test.exe
+test-physics: build
+	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c src/core/wb_physics.c tests/wb_physics_test.c -o $(TEST_PHYSICS) -L$(MUJOCO_DIR)/lib -lmujoco -lm
+	./$(TEST_PHYSICS)
 
 clean:
 	rm -rf build
