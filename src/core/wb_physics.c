@@ -34,6 +34,9 @@ struct wb_physics {
 
     int         next_body_id;   /* MuJoCo ids: world=0, then creation order */
 
+    double     *foot;           /* per-body sole offset (origin -> ground) */
+    int         foot_cap;
+
     char        err[512];
 };
 
@@ -57,6 +60,21 @@ static int body_id_of(const wb_physics *p, const char *name) {
     if (!p->model) return -1;
     int id = mj_name2id(p->model, mjOBJ_BODY, name);
     return id;
+}
+
+/* Record the distance from a body's origin to its sole (for ground checks). */
+static void set_foot(wb_physics *p, int body, double offset) {
+    if (!p || body < 0) return;
+    if (body >= p->foot_cap) {
+        int nc = p->foot_cap ? p->foot_cap * 2 : 16;
+        if (nc <= body) nc = body + 1;
+        double *nf = (double *)realloc(p->foot, (size_t)nc * sizeof *nf);
+        if (!nf) return;
+        for (int i = p->foot_cap; i < nc; i++) nf[i] = 0.0;
+        p->foot = nf;
+        p->foot_cap = nc;
+    }
+    p->foot[body] = offset;
 }
 
 /* First joint's dof address for a body, or -1 if it has no joints.
@@ -91,6 +109,7 @@ void wb_physics_free(wb_physics *p) {
     if (p->model) mj_deleteModel(p->model);
     if (p->spec)  mj_deleteSpec(p->spec);
     free(p->binds);
+    free(p->foot);
     free(p);
 }
 
@@ -218,6 +237,8 @@ int wb_physics_add_character(wb_physics *p, const char *name,
         j->axis[1] = axes[i][1];
         j->axis[2] = axes[i][2];
     }
+    /* Sole offset: distance from the body origin down to the capsule bottom. */
+    set_foot(p, id, height * 0.5 + radius);
     return id;
 }
 
@@ -280,6 +301,49 @@ void wb_physics_character_move(wb_physics *p, int body, const double vel[3]) {
     if (dof < 0) return;
     p->data->qvel[dof + 0] = vel[0];
     p->data->qvel[dof + 1] = vel[1];
+}
+
+int wb_physics_grounded(wb_physics *p, int body) {
+    if (!p || !p->data || !p->model) return 0;
+
+    /* Fast path: a contact whose normal is roughly vertical. */
+    for (int i = 0; i < p->data->ncon; i++) {
+        const mjContact *c = &p->data->contact[i];
+        int b1 = p->model->geom_bodyid[c->geom1];
+        int b2 = p->model->geom_bodyid[c->geom2];
+        if (b1 != body && b2 != body) continue;
+        double nz = c->frame[2];
+        if (nz > 0.5 || nz < -0.5) return 1;
+    }
+
+    /* Robust path: cast a ray straight down from the body origin. If it hits
+     * within (sole offset + a small margin), the body is standing on it. This
+     * stays true while a contact solver micro-bounces the body, which a pure
+     * contact-normal test misses. */
+    if (p->foot && body < p->foot_cap && p->foot[body] > 0.0) {
+        double pos[3]; wb_physics_get_pos(p, body, pos);
+        double dir[3] = {0.0, 0.0, -1.0};
+        int gid = -1;
+        double d = mj_ray(p->model, p->data, pos, dir, NULL, 1, body, &gid, NULL);
+        if (d >= 0.0 && d <= p->foot[body] + 0.06) return 1;
+    }
+    return 0;
+}
+
+void wb_physics_set_yaw(wb_physics *p, int body, double yaw) {
+    if (!p || !p->data || !p->model) return;
+    if (body < 0 || body >= p->model->nbody) return;
+    int j0 = p->model->body_jntadr[body];
+    int n  = p->model->body_jntnum[body];
+    for (int i = 0; i < n; i++) {
+        int j = j0 + i;
+        if (j < 0 || j >= p->model->njnt) continue;
+        if (p->model->jnt_type[j] == mjJNT_HINGE) {
+            int adr = p->model->jnt_qposadr[j];
+            if (adr >= 0) p->data->qpos[adr] = yaw;
+            return;
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ */

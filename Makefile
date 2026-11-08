@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -67,6 +67,20 @@ test-physics: build
 	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
 	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c src/core/wb_physics.c tests/wb_physics_test.c -o $(TEST_PHYSICS) -L$(MUJOCO_DIR)/lib -lmujoco -lm
 	./$(TEST_PHYSICS)
+
+# test-character: slice 10 -- input + camera + character controller chain
+TEST_CHAR := build/wb_character_test.exe
+test-character: build
+	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c src/core/wb_physics.c src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c tests/wb_character_test.c -o $(TEST_CHAR) -L$(MUJOCO_DIR)/lib -lmujoco -lm
+	./$(TEST_CHAR)
+
+# demo-character: slice 10 headless playable-character demo
+DEMO_CHAR := build/wb_character_demo.exe
+demo-character: build
+	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c src/core/wb_physics.c src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c examples/wb_character_demo.c -o $(DEMO_CHAR) -L$(MUJOCO_DIR)/lib -lmujoco -lm
+	./$(DEMO_CHAR)
 
 clean:
 	rm -rf build

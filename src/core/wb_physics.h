@@ -96,6 +96,14 @@ void wb_physics_get_vel(const wb_physics *p, int body, double out[3]);
  * Vertical velocity is preserved (gravity keeps working). */
 void wb_physics_character_move(wb_physics *p, int body, const double vel[3]);
 
+/* True if the body is resting on something (a contact whose normal is
+ * within ~60 deg of vertical). Used for jump grounding. */
+int  wb_physics_grounded(wb_physics *p, int body);
+
+/* Set a character's facing by writing its hinge joint angle directly.
+ * No-op for bodies without a hinge. */
+void wb_physics_set_yaw(wb_physics *p, int body, double yaw);
+
 /* ECS binding ----------------------------------------------------------- */
 
 /* Bind an ECS entity to a physics body. Physics then owns that entity's
