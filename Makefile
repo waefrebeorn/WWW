@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -96,7 +96,7 @@ test-gpu: build
 # test-assets: slice 12 -- glTF/GLB pipeline, content-addressed DDC, manifest
 TEST_ASSETS := build/wb_assets_test.exe
 test-assets: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c tests/wb_assets_test.c -o $(TEST_ASSETS) -lm
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c src/core/wb_json.c tests/wb_assets_test.c -o $(TEST_ASSETS) -lm
 	./$(TEST_ASSETS)
 
 # test-net: slice 13 -- server-authoritative netcode, prediction, AOI, delta
@@ -104,6 +104,12 @@ TEST_NET := build/wb_net_test.exe
 test-net: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/net src/core/wb_spatial.c src/net/wb_net.c tests/wb_net_test.c -o $(TEST_NET) -lm
 	./$(TEST_NET)
+
+# test-avatar: slice 14 -- avatar rig, animation sampling, identity
+TEST_AVATAR := build/wb_avatar_test.exe
+test-avatar: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c src/core/wb_json.c src/core/wb_avatar.c tests/wb_avatar_test.c -o $(TEST_AVATAR) -lm
+	./$(TEST_AVATAR)
 
 clean:
 	rm -rf build
