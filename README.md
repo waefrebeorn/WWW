@@ -49,6 +49,18 @@ docs/            design notes
 6. Slerm Lua (drop stock) to stay on the no-third-party pillar
 7. Agentic connection to wubuwizard/federation
 
+## Meta-engine assessment (2026-11-08)
+
+`docs/meta-engine-assessment.md` — the strategic read: measured gaps, the five
+platform pillars (networking, physics, content pipeline, avatar+identity,
+creator tooling), the gameplay-loop taxonomy (core/secondary/meta) and the
+targeted sandboxes (obby, tycoon, survival, BR, racing, social, build), the
+competitive landscape (Roblox, UEFN, Minecraft, VRChat, Core, Vircadia,
+Webaverse), and the reference architectures to copy (one spatial index for
+AOI+streaming+sharding; authority-vs-interest; client prediction; Luau sandbox;
+glTF+VRM avatars; content-addressed DDC). Ends with a prioritized slice 9–18
+roadmap from kernel to meta engine.
+
 ## Contracts
 
 - C11 owns memory + simulation; Lua owns logic. Lua never allocates core memory.
