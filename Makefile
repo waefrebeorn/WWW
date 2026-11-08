@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -92,6 +92,12 @@ test-gpu: build
 	$(CXX) -std=c++17 -O2 -Isrc/core -c src/core/wb_gpu_d3d12.c -o build/wb_gpu_d3d12.o
 	$(CXX) build/wb_gpu_test.o build/wb_gpu_d3d12.o -o $(TEST_GPU) -ld3d12 -ldxgi -ld3dcompiler
 	./$(TEST_GPU)
+
+# test-assets: slice 12 -- glTF/GLB pipeline, content-addressed DDC, manifest
+TEST_ASSETS := build/wb_assets_test.exe
+test-assets: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c tests/wb_assets_test.c -o $(TEST_ASSETS) -lm
+	./$(TEST_ASSETS)
 
 clean:
 	rm -rf build
