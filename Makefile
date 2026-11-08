@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -81,6 +81,17 @@ demo-character: build
 	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
 	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c src/core/wb_physics.c src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c examples/wb_character_demo.c -o $(DEMO_CHAR) -L$(MUJOCO_DIR)/lib -lmujoco -lm
 	./$(DEMO_CHAR)
+
+# test-gpu: slice 11 -- the D3D12 GPU backend.
+# The backend is compiled as C++ (MinGW's d3d12.h exposes C++ interfaces); the
+# public header is extern "C", so the test and the rest of the engine stay C11.
+CXX        := g++
+TEST_GPU   := build/wb_gpu_test.exe
+test-gpu: build
+	gcc $(CFLAGS) -Isrc/core -c tests/wb_gpu_test.c -o build/wb_gpu_test.o
+	$(CXX) -std=c++17 -O2 -Isrc/core -c src/core/wb_gpu_d3d12.c -o build/wb_gpu_d3d12.o
+	$(CXX) build/wb_gpu_test.o build/wb_gpu_d3d12.o -o $(TEST_GPU) -ld3d12 -ldxgi -ld3dcompiler
+	./$(TEST_GPU)
 
 clean:
 	rm -rf build
