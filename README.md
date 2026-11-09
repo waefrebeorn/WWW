@@ -29,7 +29,7 @@ WWW/
 ```bash
 cd '~WuBu~'
 mingw32-make all      # -> build/wubu_engine.exe
-mingw32-make test     # 23 gates, 797 assertions
+mingw32-make test     # 23 gates, 820 assertions
 mingw32-make run      # runs the omniverse-hub gametype
 ./build/wubu_engine.exe games omniverse-hub
 ```
