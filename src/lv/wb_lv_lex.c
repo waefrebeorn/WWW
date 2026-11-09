@@ -6,6 +6,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 void wb_lv_perr(parser *P, const char *msg) {
@@ -110,20 +111,32 @@ void wb_lv_next_tok(parser *P) {
         return;
     }
 
-    /* string */
+    /* string -- the literal can be arbitrarily long, so grow the buffer.
+     * (A fixed char buf[256] here overflowed the stack on any longer
+     * literal; the parser is untrusted input.) */
     if (c == '"' || c == '\'') {
         char q = c;
         P->p++;
-        char buf[256];
-        size_t bl = 0;
+        size_t cap = 64, bl = 0;
+        char *buf = (char *)malloc(cap);
+        if (!buf) { wb_lv_perr(P, "out of memory"); P->cur = t; return; }
         while (P->p < n && s[P->p] != q) {
-            if (s[P->p] == '\\' && P->p + 1 < n) { P->p++; buf[bl++] = s[P->p++]; }
-            else buf[bl++] = s[P->p++];
+            char ch;
+            if (s[P->p] == '\\' && P->p + 1 < n) { P->p++; ch = s[P->p++]; }
+            else ch = s[P->p++];
+            if (bl + 2 > cap) {
+                cap *= 2;
+                char *nb = (char *)realloc(buf, cap);
+                if (!nb) { free(buf); wb_lv_perr(P, "string literal too long"); P->cur = t; return; }
+                buf = nb;
+            }
+            buf[bl++] = ch;
         }
         if (P->p < n) P->p++; /* closing quote */
         buf[bl] = 0;
         t.type = T_STR;
         t.str = wb_lv_intern(P->L, buf, bl);
+        free(buf);
         P->cur = t;
         return;
     }

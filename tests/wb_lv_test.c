@@ -137,6 +137,70 @@ int main(void) {
     check_rec(&r, "5");
     r.n = 0; r.buf[0] = 0;
 
+    /* 9: robustness + semantics regressions (each of these was a real bug) */
+    {
+        /* the lexer used a fixed char buf[256]; a longer literal overflowed it */
+        char big[1100];
+        big[0]='x'; big[1]=' '; big[2]='='; big[3]=' '; big[4]='"';
+        memset(big + 5, 'A', 1000);
+        big[1005] = '"'; big[1006] = 0;
+        const char *e = wb_lv_run(L, big, "big");
+        CHECK(e == NULL, "a 1000-char string literal parses without error");
+        wb_lv_value v = wb_lv_get_global(L, "x");
+        CHECK(v.t == WB_LV_STR && strlen(v.as.s) == 1000,
+              "the long literal round-trips intact");
+    }
+    {
+        /* the AST pool and the parser lived on the C stack with no depth limit */
+        char deep[1200];
+        int n = 0;
+        for (int i = 0; i < 500; i++) deep[n++] = '(';
+        deep[n++] = '1';
+        for (int i = 0; i < 500; i++) deep[n++] = ')';
+        deep[n] = 0;
+        CHECK(wb_lv_run(L, deep, "deep") != NULL,
+              "over-deep nesting is rejected with an error, not a crash");
+    }
+    {
+        /* the table-literal loop never checked EOF, so this hung forever */
+        CHECK(wb_lv_run(L, "x = { 1, 2, 3", "unterm") != NULL,
+              "an unterminated table literal is an error, not a hang");
+    }
+    {
+        /* closures captured pointers into wb_lv_run's C-stack AST pool */
+        wb_lv_run(L, "function late(dt) return dt * 2 end", "late");
+        wb_lv_run(L, "unused = 1", "clobber");
+        wb_lv_value fn = wb_lv_get_global(L, "late");
+        wb_lv_value arg = wb_lv_number(21);
+        wb_lv_value got = wb_lv_call(L, fn, &arg, 1);
+        CHECK(got.t == WB_LV_NUM && got.as.n == 42.0,
+              "a closure survives into wb_lv_call after another run");
+    }
+    {
+        /* a failing call used to leave no error behind at all */
+        CHECK(wb_lv_run(L, "nope()", "callnil") != NULL,
+              "calling an undefined global reports an error");
+        CHECK(wb_lv_run(L, "x = 5\nx()", "callnum") != NULL,
+              "calling a non-function reports an error");
+    }
+    {
+        /* every comparison coerced non-numbers to 0, so 'a' < 'b' was false */
+        r.n = 0; r.buf[0] = 0;
+        wb_lv_run(L, "if 'a' < 'b' then echo('LT') else echo('GE') end", "cmp");
+        check_rec(&r, "LT");
+    }
+    {
+        /* wb_lv_tostring's shared buffer aliased: 1 .. 2 produced "22" */
+        r.n = 0; r.buf[0] = 0;
+        wb_lv_run(L, "echo(1 .. 2)", "concat");
+        check_rec(&r, "12");
+    }
+    {
+        /* unbounded script recursion used to eat the C stack */
+        CHECK(wb_lv_run(L, "function f(n) return f(n+1) end\nf(0)", "rec") != NULL,
+              "unbounded script recursion reports an error");
+    }
+
     wb_lv_free(L);
     printf("\n=== LV TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

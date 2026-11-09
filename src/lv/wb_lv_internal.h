@@ -25,31 +25,12 @@ void *wb_lv_arena_alloc(wb_lv *L, size_t n);
 #define WB_LV_ALLOC(T, L)     ((T *)wb_lv_arena_alloc((L), sizeof(T)))
 #define WB_LV_ALLOCN(T, n, L) ((T *)wb_lv_arena_alloc((L), (n) * sizeof(T)))
 
-/* ---------------------------------------------------------------- state */
-
-struct wb_lv {
-    struct anode *root;
-    struct istr **buckets; size_t nbuckets;
-    wb_lv_table *globals;
-    wb_lv_value *stack; int sp, scap;
-    char err[512]; int has_err;
-    int depth;
-};
-
-/* --------------------------------------------------------- string pool */
-
-typedef struct istr { char *s; size_t len; unsigned hash; struct istr *next; } istr;
-
-/* --------------------------------------------------------------- tables */
-
-typedef struct wb_lv_kv { wb_lv_value k, v; int used; } wb_lv_kv;
-struct wb_lv_table { wb_lv_kv *e; size_t cap, count; };
-
 /* ------------------------------------------------------------------ AST */
 
 typedef enum {
     N_NUM, N_STR, N_BOOL, N_NIL, N_NAME, N_INDEX, N_BINOP, N_UNARY, N_TABLE,
     N_CALL, N_FUNC, N_LOCAL, N_ASSIGN, N_IF, N_WHILE, N_FOR, N_RETURN, N_BLOCK,
+    N_EXPR,   /* expression statement: e1 is the expression, result discarded */
 } ntype;
 
 typedef struct ex {
@@ -62,7 +43,38 @@ typedef struct ex {
 } ex;
 
 #define WB_LV_MAX_EX 8192
+/* Parser nesting limit (Lua's own limit is 200). Without it a few thousand
+ * nested parens exhaust the C stack. */
+#define WB_LV_MAX_DEPTH 200
+/* Expression-evaluation nesting limit. Each Lua call level costs ~2 eval
+ * levels (the call node in the return statement + the recursive call), so this
+ * allows roughly 200 script call levels -- Lua's own limit. */
+#define WB_LV_MAX_EVAL_DEPTH 400
+/* Lua call nesting limit; guards against unbounded script recursion. */
+#define WB_LV_MAX_CALL 200
 typedef struct { ex n[WB_LV_MAX_EX]; int cnt; } pool;
+
+/* ---------------------------------------------------------------- state */
+
+struct wb_lv {
+    struct anode *root;
+    struct istr **buckets; size_t nbuckets;
+    wb_lv_table *globals;
+    wb_lv_value *stack; int sp, scap;
+    char err[512]; int has_err;
+    int depth;          /* current Lua call nesting (recursion guard) */
+    int eval_depth;     /* expression evaluation nesting (recursion guard) */
+    pool *pool;         /* AST pool, arena-backed so closures outlive wb_lv_run */
+};
+
+/* --------------------------------------------------------- string pool */
+
+typedef struct istr { char *s; size_t len; unsigned hash; struct istr *next; } istr;
+
+/* --------------------------------------------------------------- tables */
+
+typedef struct wb_lv_kv { wb_lv_value k, v; int used; } wb_lv_kv;
+struct wb_lv_table { wb_lv_kv *e; size_t cap, count; };
 
 /* --------------------------------------------------------------- parser */
 
@@ -81,8 +93,11 @@ typedef struct {
     const char *src; size_t p; int line;
     tok cur;
     wb_lv *L; pool *pl; int err;
+    int depth;          /* parser nesting (see WB_LV_MAX_DEPTH) */
 } parser;
 
+void wb_lv_set_err(wb_lv *L, const char *fmt, ...);
+const char *wb_lv_type_name(wb_lv_type t);
 void wb_lv_next_tok(parser *P);
 void wb_lv_perr(parser *P, const char *msg);
 

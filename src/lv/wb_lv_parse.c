@@ -24,6 +24,33 @@ static ex *parse_expr(parser *P);
 static ex *parse_stmt(parser *P);
 static ex *parse_block(parser *P, const char *until, const char *until2, int *matched);
 static ex *parse_bin(parser *P, int minprec);
+static ex *parse_primary_impl(parser *P);
+static ex *parse_block_impl(parser *P, const char *until, const char *until2, int *matched);
+
+/* Nesting guard. Without it a few thousand nested parentheses recurse until
+ * the C stack is gone; Lua's own limit is 200, so match it. */
+static ex *parse_primary(parser *P) {
+    if (P->depth >= WB_LV_MAX_DEPTH) {
+        wb_lv_perr(P, "expression nested too deeply");
+        return NULL;
+    }
+    P->depth++;
+    ex *e = parse_primary_impl(P);
+    P->depth--;
+    return e;
+}
+
+static ex *parse_block(parser *P, const char *until, const char *until2, int *matched) {
+    if (matched) *matched = 0;
+    if (P->depth >= WB_LV_MAX_DEPTH) {
+        wb_lv_perr(P, "block nested too deeply");
+        return NULL;
+    }
+    P->depth++;
+    ex *b = parse_block_impl(P, until, until2, matched);
+    P->depth--;
+    return b;
+}
 
 static int binprec(int type) {
     switch (type) {
@@ -37,7 +64,7 @@ static int binprec(int type) {
     return 0;
 }
 
-static ex *parse_primary(parser *P) {
+static ex *parse_primary_impl(parser *P) {
     ex *e = NULL;
     tok t = P->cur;
     switch (t.type) {
@@ -53,6 +80,7 @@ static ex *parse_primary(parser *P) {
         tab->t = N_TABLE;
         ex **vals=NULL,**keys=NULL; int nv=0,cap=0;
         while (!tok_is(P, '}')) {
+            if (tok_is(P, T_EOF)) { wb_lv_perr(P, "unterminated table literal"); break; }
             ex *key = NULL;
             /* bare-name field: name = value  (key becomes the interned name) */
             if (tok_is(P, T_NAME)) {
@@ -176,6 +204,7 @@ static ex *parse_primary(parser *P) {
             tab->t = N_TABLE;
             ex **vals=NULL,**keys=NULL; int nv=0,cap=0;
             while (!tok_is(P, '}')) {
+                if (tok_is(P, T_EOF)) { wb_lv_perr(P, "unterminated table literal"); break; }
                 /* try [k] = v */
                 ex *key = NULL;
                 if (tok_is(P, '[')) { wb_lv_next_tok(P); key = parse_expr(P); expect(P,']',"expected ']'"); }
@@ -334,12 +363,14 @@ static ex *parse_stmt(parser *P) {
         else { wb_lv_perr(P, "invalid assignment target"); }
         return s;
     }
-    /* expression statement (e.g. a call) */
-    s->t = N_CALL; s->e1 = expr; s->nlist = 0; s->e2 = NULL;
+    /* expression statement (e.g. a call). Its own node type: previously this
+     * reused N_CALL with the expression in the callee slot, so eval() ran the
+     * call and then tried to call its RESULT. */
+    s->t = N_EXPR; s->e1 = expr;
     return s;
 }
 
-static ex *parse_block(parser *P, const char *until, const char *until2, int *matched) {
+static ex *parse_block_impl(parser *P, const char *until, const char *until2, int *matched) {
     (void)until; (void)until2;
     ex *block = espawn(P->pl); if(!block){wb_lv_perr(P,"pool");return NULL;}
     block->t = N_BLOCK;

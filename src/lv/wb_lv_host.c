@@ -5,9 +5,23 @@
  */
 #include "wb_lv_internal.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+void wb_lv_set_err(wb_lv *L, const char *fmt, ...) {
+    if (!L) return;
+    /* First error wins. A guard (nesting limit) returning nil makes every
+     * enclosing frame see a nil callee; without this, the cascading
+     * "attempt to call a nil value" would overwrite the real cause. */
+    if (L->has_err) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(L->err, sizeof L->err, fmt, ap);
+    va_end(ap);
+    L->has_err = 1;
+}
 
 wb_lv *wb_lv_alloc(void) {
     wb_lv *L = (wb_lv *)calloc(1, sizeof(*L));
@@ -49,14 +63,23 @@ void wb_lv_set_global(wb_lv *L, const char *name, wb_lv_value v) {
 const char *wb_lv_run(wb_lv *L, const char *src, const char *chunkname) {
     (void)chunkname;
     L->has_err = 0; L->err[0] = 0;
-    pool pl; memset(&pl, 0, sizeof pl);
-    ex *root = NULL;
-    if (wb_lv_parse_driver(L, src, &pl, &root)) {
-        /* the AST pool is on the C stack (pl is local); pointers stored into
-           closures would dangle, but for a run() that executes immediately in
-           one shot it is fine (documented limitation). */
-        return L->err[0] ? L->err : "parse error";
+
+    /* The AST pool is arena-backed, NOT on the C stack. wb_lv_call() may be
+     * used on a function defined by an earlier wb_lv_run() (that is the
+     * engine-loop contract), so closures must keep their body/params alive
+     * after run() returns. One pool per state, allocated lazily and never
+     * reset: nodes only accumulate for the life of the state. */
+    if (!L->pool) {
+        L->pool = WB_LV_ALLOC(pool, L);
+        if (!L->pool) {
+            wb_lv_set_err(L, "out of memory");
+            return L->err;
+        }
     }
+
+    ex *root = NULL;
+    if (wb_lv_parse_driver(L, src, L->pool, &root))
+        return L->err[0] ? L->err : "parse error";
     wb_lv_exec_root(L, root);
     return L->has_err ? L->err : NULL;
 }
@@ -82,18 +105,9 @@ static wb_lv_value cfn_tonumber(wb_lv *L, wb_lv_value *args, int n, void *ud) {
 
 static wb_lv_value cfn_type(wb_lv *L, wb_lv_value *args, int n, void *ud) {
     (void)ud;
-    const char *s = "nil";
-    if (n>0) {
-        switch (args[0].t) {
-        case WB_LV_NIL: s="nil"; break;
-        case WB_LV_BOOL: s="boolean"; break;
-        case WB_LV_NUM: s="number"; break;
-        case WB_LV_STR: s="string"; break;
-        case WB_LV_TABLE: s="table"; break;
-        case WB_LV_FUNCTION: case WB_LV_CFUNCTION: s="function"; break;
-        }
-    }
-    return wb_lv_str(wb_lv_intern(L, s, strlen(s)));
+    return wb_lv_str(wb_lv_intern(L,
+                                  wb_lv_type_name(n > 0 ? args[0].t : WB_LV_NIL),
+                                  strlen(wb_lv_type_name(n > 0 ? args[0].t : WB_LV_NIL))));
 }
 
 void wb_lv_register_builtins(wb_lv *L) {
