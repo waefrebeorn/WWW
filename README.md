@@ -13,7 +13,8 @@ WWW/
 ├── README.md      this file
 └── ~WuBu~/        the world-space engine
     ├── src/core/  ECS, quadkey spatial, tiles, render, exp, physics,
-    │              GPU (D3D12), assets, avatar, editor, dist, shared kernel
+    │              GPU (D3D12), assets, avatar, editor, dist, gametypes
+    │              (mode/spawn/worldspace), shared kernel
     ├── src/lua/   Lua 5.4 host + bindings + modding sandbox
     ├── src/lv/    slerm-Lua: the C11 interpreter (arena/value/lex/parse/eval/host)
     ├── src/net/   networking (AOI/server/client/loopback) + server meshing
@@ -28,7 +29,7 @@ WWW/
 ```bash
 cd '~WuBu~'
 mingw32-make all      # -> build/wubu_engine.exe
-mingw32-make test     # 17 gates, 573 assertions
+mingw32-make test     # 20 gates, 705 assertions
 mingw32-make run      # runs games/main.lua
 ./build/wubu_engine.exe games/yourgame.lua
 ```
@@ -45,6 +46,23 @@ gates, the Windows SDK / vendored MuJoCo.
 | the registry — one truth, many copies | [WuBuFederation](https://github.com/waefrebeorn/WuBuFederation) |
 | the OS it ships in | [WuBuOS](https://github.com/waefrebeorn/WuBuOS) |
 | the shared kernel + glTF accessor layer | `WWW/~WuBu~/src/core/wb_util.*`, `wb_gltf.*` |
+
+## Gametypes
+
+A **gametype** is a declared, parameterisable package — the UEFN project
+analogue, minus the platform:
+
+```
+gametype/
+├── mode.json      name, entry script, typed config schema, teams
+├── main.lua       the mode's step() — owns gameplay
+└── assets/        referenced by path
+```
+
+`wb_worldspace` answers the one call a host makes: pick a mode, get an
+instance and a world position. The engine knows modes, configs, spawns and
+instances — it does not know games. That ignorance is what lets all gametypes
+work. See `docs/WWW.md` for the doctrine of the space.
 
 ## Module rules (enforced)
 
