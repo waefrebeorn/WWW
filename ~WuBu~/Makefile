@@ -58,18 +58,9 @@ test-exp: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_SRC) -o $(TEST_EXP) -lm
 	./$(TEST_EXP)
 
-# test-lv: the slerm-Lua interpreter (two harnesses)
-LV_SRC := src/lv/wb_lv_arena.c src/lv/wb_lv_value.c src/lv/wb_lv_lex.c \
-          src/lv/wb_lv_parse.c src/lv/wb_lv_eval.c src/lv/wb_lv_host.c
-TEST_LV  := build/wb_lv_test.exe
-TEST_LVS := build/wb_lv_script_test.exe
-test-lv: test-lv-core test-lv-script
-test-lv-core: build
-	$(CC) $(CFLAGS) -Isrc/lv $(LV_SRC) tests/wb_lv_test.c -o $(TEST_LV) -lm
-	./$(TEST_LV)
-test-lv-script: build
-	$(CC) $(CFLAGS) -Isrc/lv $(LV_SRC) tests/wb_lv_script_test.c -o $(TEST_LVS) -lm
-	./$(TEST_LVS)
+# test-lv: slerm-Lua -- the Wua submodule (~WuBu~/src/lv, github.com/waefrebeorn/Wua)
+test-lv: build
+	$(MAKE) -C src/lv test
 
 # test-physics: slice 9 -- MuJoCo-backed physics world
 MUJOCO_DIR  := thirdparty/mujoco

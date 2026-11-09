@@ -1,0 +1,3 @@
+[submodule "~WuBu~/src/lv"]
+	path = ~WuBu~/src/lv
+	url = git@github.com:waefrebeorn/Wua.git

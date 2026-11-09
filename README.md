@@ -16,7 +16,7 @@ WWW/
     │              GPU (D3D12), assets, avatar, editor, dist, gametypes
     │              (mode/spawn/worldspace), shared kernel
     ├── src/lua/   Lua 5.4 host + bindings + modding sandbox
-    ├── src/lv/    slerm-Lua: the C11 interpreter (arena/value/lex/parse/eval/host)
+    ├── src/lv/    → the **Wua** submodule: slerm-Lua, github.com/waefrebeorn/Wua
     ├── src/net/   networking (AOI/server/client/loopback) + server meshing
     ├── tests/     one harness per module — `make test` runs every gate
     ├── games/     Lua game scripts
@@ -34,6 +34,12 @@ mingw32-make run      # runs games/main.lua
 ./build/wubu_engine.exe games/yourgame.lua
 ```
 
+The `src/lv` tree is the **Wua** submodule
+(`git@github.com:waefrebeorn/Wua.git`) — slerm-Lua, a ground-up Lua 5.4
+reimplementation. After cloning WWW, run
+`git submodule update --init --recursive`; `make test-lv` delegates to
+Wua's own two gates.
+
 Requires MinGW64 gcc (`mingw32-make`, not `make`) and, for the GPU and physics
 gates, the Windows SDK / vendored MuJoCo.
 
@@ -46,6 +52,7 @@ gates, the Windows SDK / vendored MuJoCo.
 | the registry — one truth, many copies | [WuBuFederation](https://github.com/waefrebeorn/WuBuFederation) |
 | the OS it ships in | [WuBuOS](https://github.com/waefrebeorn/WuBuOS) |
 | the shared kernel + glTF accessor layer | `WWW/~WuBu~/src/core/wb_util.*`, `wb_gltf.*` |
+| slerm-Lua (the C11 Lua 5.4 interpreter) | [Wua](https://github.com/waefrebeorn/Wua) — submodule at `WWW/~WuBu~/src/lv` |
 
 ## Gametypes
 
