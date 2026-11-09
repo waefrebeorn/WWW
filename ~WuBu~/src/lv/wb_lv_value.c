@@ -44,6 +44,21 @@ const char *wb_lv_tostring(wb_lv_value v) {
     return "(value)";
 }
 
+/* The single type-name table, shared by the error path and the `type`
+ * builtin so the two cannot drift. */
+const char *wb_lv_type_name(wb_lv_type t) {
+    switch (t) {
+    case WB_LV_NIL: return "nil";
+    case WB_LV_BOOL: return "boolean";
+    case WB_LV_NUM: return "number";
+    case WB_LV_STR: return "string";
+    case WB_LV_TABLE: return "table";
+    case WB_LV_FUNCTION:
+    case WB_LV_CFUNCTION: return "function";
+    }
+    return "unknown";
+}
+
 /* -------------------------------------------------------- string interning */
 
 static unsigned strhash(const char *s, size_t n) {

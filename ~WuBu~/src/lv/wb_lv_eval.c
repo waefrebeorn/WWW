@@ -33,11 +33,32 @@ static void env_assign(wb_lv *L, env *e, const char *name, wb_lv_value v) {
     wb_lv_table_set(L, L->globals, wb_lv_str(wb_lv_intern(L, name, strlen(name))), v);
 }
 
-static wb_lv_value eval(wb_lv *L, ex *e, env *en);
+static wb_lv_value eval_impl(wb_lv *L, ex *e, env *en);
 static wb_lv_value exec(wb_lv *L, ex *e, env *en, int *was_return);
+
+/* Expression-evaluation nesting guard. A left-deep AST (e.g. 5000 postfix
+ * calls like `(1)(1)(1)...`) recurses once per node and would otherwise
+ * exhaust the C stack before any parser limit is hit. */
+static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
+    if (L->eval_depth >= WB_LV_MAX_EVAL_DEPTH) {
+        wb_lv_set_err(L, "expression nested too deeply (limit %d)", WB_LV_MAX_EVAL_DEPTH);
+        return wb_lv_nil();
+    }
+    L->eval_depth++;
+    wb_lv_value r = eval_impl(L, e, en);
+    L->eval_depth--;
+    return r;
+}
 
 /* call a lua function value */
 wb_lv_value wb_lv_call_lua(wb_lv *L, wb_lv_func *fn, wb_lv_value *args, int nargs) {
+    /* recursion guard: unbounded script self-recursion would eat the C stack */
+    if (L->depth >= WB_LV_MAX_CALL) {
+        wb_lv_set_err(L, "call nesting too deep (limit %d)", WB_LV_MAX_CALL);
+        return wb_lv_nil();
+    }
+    L->depth++;
+
     /* new env: params bound, then body; use exec() so `return` propagates. */
     env *e = WB_LV_ALLOC(env, L);
     e->t = wb_lv_table_new(L, 0, 8);
@@ -49,17 +70,19 @@ wb_lv_value wb_lv_call_lua(wb_lv *L, wb_lv_func *fn, wb_lv_value *args, int narg
         int wr = 0;
         for (int i = 0; i < fn->body->nlist; i++) {
             ret = exec(L, fn->body->list[i], e, &wr);
-            if (wr) return ret;                 /* `return expr` fired */
-            if (L->has_err) return ret;
+            if (wr) { L->depth--; return ret; }      /* `return expr` fired */
+            if (L->has_err) { L->depth--; return ret; }
         }
     }
+    L->depth--;
     return wb_lv_nil();
 }
 
 /* run the value of an expression */
-static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
+static wb_lv_value eval_impl(wb_lv *L, ex *e, env *en) {
     if (!e) return wb_lv_nil();
     switch (e->t) {
+    case N_EXPR: return eval(L, e->e1, en);   /* expression statement */
     case N_NUM: return wb_lv_number(e->num);
     case N_STR: return wb_lv_str(e->str);
     case N_BOOL:return wb_lv_bool(e->boolean);
@@ -67,8 +90,11 @@ static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
     case N_NAME: return env_get(L, en, e->name);
     case N_INDEX: {
         wb_lv_value obj = eval(L, e->e1, en);
+        if (obj.t != WB_LV_TABLE) {
+            wb_lv_set_err(L, "attempt to index a %s value", wb_lv_type_name(obj.t));
+            return wb_lv_nil();
+        }
         wb_lv_value key = eval(L, e->e2, en);
-        if (obj.t != WB_LV_TABLE) return wb_lv_nil();
         return wb_lv_table_get(L, obj.as.tab, key);
     }
     case N_UNARY: {
@@ -82,13 +108,26 @@ static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
         int op = (int)e->num;
         if (op == T_AND) return wb_lv_truthy(a) ? b : a;
         if (op == T_OR)  return wb_lv_truthy(a) ? a : b;
+        /* Strings compare lexicographically, as Lua does. Previously every
+         * comparison coerced non-numbers to 0, so 'a' < 'b' was false. */
+        if ((op == '<' || op == '>' || op == T_LE || op == T_GE) &&
+            a.t == WB_LV_STR && b.t == WB_LV_STR) {
+            int c = strcmp(a.as.s, b.as.s);
+            switch (op) {
+            case '<':  return wb_lv_bool(c < 0);
+            case '>':  return wb_lv_bool(c > 0);
+            case T_LE: return wb_lv_bool(c <= 0);
+            case T_GE: return wb_lv_bool(c >= 0);
+            }
+        }
         double x = a.t==WB_LV_NUM?a.as.n:0, y = b.t==WB_LV_NUM?b.as.n:0;
         switch (op) {
         case '+': return wb_lv_number(x+y);
         case '-': return wb_lv_number(x-y);
         case '*': return wb_lv_number(x*y);
-        case '/': return y!=0 ? wb_lv_number(x/y) : wb_lv_nil();
-        case '%': return y!=0 ? wb_lv_number(fmod(x,y)) : wb_lv_nil();
+        /* Lua yields inf/nan on a zero divisor, not nil */
+        case '/': return wb_lv_number(x/y);
+        case '%': return y!=0 ? wb_lv_number(fmod(x,y)) : wb_lv_number(nan(""));
         case '<': return wb_lv_bool(x<y);
         case '>': return wb_lv_bool(x>y);
         case T_LE: return wb_lv_bool(x<=y);
@@ -96,9 +135,17 @@ static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
         case T_EQ: return wb_lv_bool(wb_lv_equal(a,b));
         case T_NE: return wb_lv_bool(!wb_lv_equal(a,b));
         case T_CONCAT: {
-            const char *sa = wb_lv_tostring(a), *sb = wb_lv_tostring(b);
+            /* wb_lv_tostring() returns a shared static buffer for numbers, so
+             * copy a numeric operand BEFORE asking for the other side --
+             * otherwise `1 .. 2` produced "22". */
+            char abuf[64], bbuf[64];
+            const char *sa = wb_lv_tostring(a);
+            if (a.t != WB_LV_STR) { snprintf(abuf, sizeof abuf, "%s", sa); sa = abuf; }
+            const char *sb = wb_lv_tostring(b);
+            if (b.t != WB_LV_STR) { snprintf(bbuf, sizeof bbuf, "%s", sb); sb = bbuf; }
             size_t la=strlen(sa), lb=strlen(sb);
             char *buf = (char *)malloc(la+lb+1);
+            if (!buf) return wb_lv_nil();
             memcpy(buf,sa,la); memcpy(buf+la,sb,lb); buf[la+lb]=0;
             const char *in = wb_lv_intern(L, buf, la+lb);
             free(buf);
@@ -136,6 +183,7 @@ static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
             for (int i = 0; i < e->nlist; i++) args[1+i] = eval(L, e->list[i], en);
             if (callee.t == WB_LV_FUNCTION) { wb_lv_value r = wb_lv_call_lua(L, callee.as.fn, args, na); free(args); return r; }
             if (callee.t == WB_LV_CFUNCTION) { wb_lv_value r = callee.as.cf.f(L, args, na, callee.as.cf.ud); free(args); return r; }
+            wb_lv_set_err(L, "attempt to call a %s value", wb_lv_type_name(callee.t));
             free(args); return wb_lv_nil();
         }
         wb_lv_value callee = eval(L, e->e1, en);
@@ -144,6 +192,7 @@ static wb_lv_value eval(wb_lv *L, ex *e, env *en) {
         for (int i = 0; i < e->nlist; i++) args[i] = eval(L, e->list[i], en);
         if (callee.t == WB_LV_FUNCTION) { wb_lv_value r = wb_lv_call_lua(L, callee.as.fn, args, na); free(args); return r; }
         if (callee.t == WB_LV_CFUNCTION) { wb_lv_value r = callee.as.cf.f(L, args, na, callee.as.cf.ud); free(args); return r; }
+        wb_lv_set_err(L, "attempt to call a %s value", wb_lv_type_name(callee.t));
         free(args); return wb_lv_nil();
     }
     case N_LOCAL:
@@ -187,7 +236,10 @@ static wb_lv_value exec(wb_lv *L, ex *e, env *en, int *was_return) {
         }
         return wb_lv_nil();
     }
-    case N_CALL:   /* bare call statement */
+    case N_EXPR:   /* expression statement: evaluate, discard the result */
+        eval(L, e->e1, en);
+        return wb_lv_nil();
+    case N_CALL:   /* a call node reaching exec directly */
         eval(L, e, en);
         return wb_lv_nil();
     case N_FUNC: {  /* function name(...) body -- define global + assign */
