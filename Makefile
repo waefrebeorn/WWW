@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -128,6 +128,12 @@ TEST_EDIT := build/wb_edit_test.exe
 test-edit: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_ecs.c src/core/wb_json.c src/core/wb_edit.c tests/wb_edit_test.c -o $(TEST_EDIT) -lm
 	./$(TEST_EDIT)
+
+# test-mesh: slice 18 -- server meshing (authority, handover, streaming)
+TEST_MESH := build/wb_mesh_test.exe
+test-mesh: build
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/net src/net/wb_mesh.c tests/wb_mesh_test.c -o $(TEST_MESH) -lm
+	./$(TEST_MESH)
 
 clean:
 	rm -rf build
