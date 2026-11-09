@@ -10,7 +10,7 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 11 | GPU backend | render graph + GPU backend behind the software rasterizer's geometry API | `make test-gpu` — 26 | ✅ |
 | 12 | content pipeline | glTF/GLB import → GPU-ready, content-addressed DDC, manifest | `make test-assets` — 30 | ✅ |
 | 13 | networking | authoritative server, client prediction, AOI on the quadkey | `make test-net` — 28 | ✅ |
-| 14 | avatar + identity | glTF+VRM humanoid import, rig, cross-world identity | `make test-avatar` | ⬜ |
+| 14 | avatar + identity | glTF+VRM humanoid import, rig, cross-world identity | `make test-avatar` — 32 | ✅ |
 | 15 | modding sandbox | untrusted-code sandbox (Luau model), mod manifest, hot reload | `make test-mod` | ⬜ |
 | 16 | experience distribution | portals/stadiums, instance matchmaking, discovery hooks | `make test-exp2` | ⬜ |
 | 17 | editor | in-engine world editing + live edit | `make test-editor` | ⬜ |

@@ -12,6 +12,7 @@
 #include <lauxlib.h>
 #include <lualib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* components registered at init; Lua sees them by name */
@@ -28,6 +29,7 @@ static const struct { const char *name; size_t size; } kComps[] = {
 #define kCompCount (sizeof(kComps)/sizeof(kComps[0]))
 
 #define WB_META_WORLD "wb_world_ptr"
+#define SANDBOX_ENV_KEY "wb_sandbox_env"
 
 /* register the component schema on a world (idempotent per new world) */
 void wb_world_setup_comps(wb_world *w) {
@@ -129,8 +131,10 @@ lua_State *wb_script_create_state(wb_world *w) {
     return L;
 }
 
-int wb_script_step(lua_State *L, float dt) {
-    lua_getglobal(L, "step");
+static void push_sandbox_global(lua_State *L, const char *name);
+
+int wb_script_step(struct lua_State *L, float dt) {
+    push_sandbox_global(L, "step");
     if (lua_isnil(L, -1)) { lua_pop(L, 1); return 0; }
     lua_pushnumber(L, dt);
     if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
@@ -139,6 +143,157 @@ int wb_script_step(lua_State *L, float dt) {
         return -1;
     }
     return 1;
+}
+
+/* ==================================================================== */
+/* sandbox (untrusted mod code)                                         */
+/* ==================================================================== */
+
+/* Libraries a mod must never reach. Everything else falls through to the real
+ * globals via the registry. */
+static int sandbox_blocked(const char *k) {
+    static const char *blocked[] = {
+        "os", "io", "debug", "package", "require",
+        "load", "loadfile", "loadstring", "dofile",
+        "collectgarbage", "getfenv", "setfenv", "newproxy",
+        NULL
+    };
+    for (int i = 0; blocked[i]; i++)
+        if (!strcmp(blocked[i], k)) return 1;
+    return 0;
+}
+
+/* __index proxy: whitelist through to the real globals, block the rest. */
+static int sandbox_index(lua_State *L) {
+    const char *k = lua_tostring(L, 2);
+    if (k && sandbox_blocked(k)) { lua_pushnil(L); return 1; }
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
+    lua_pushvalue(L, 2);
+    lua_rawget(L, -2);
+    return 1;
+}
+
+/* __newindex: mods may write their own globals, never the host's. */
+static int sandbox_newindex(lua_State *L) {
+    lua_pushvalue(L, 1);
+    lua_pushvalue(L, 2);
+    lua_pushvalue(L, 3);
+    lua_rawset(L, -3);
+    return 0;
+}
+
+typedef struct { long budget; long used; int exceeded; } sandbox_state;
+
+#define SANDBOX_STATE_KEY "wb_sandbox_state"
+
+static sandbox_state *sandbox_state_of(lua_State *L) {
+    lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_STATE_KEY);
+    sandbox_state *st = (sandbox_state *)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return st;
+}
+
+static void sandbox_hook(lua_State *L, lua_Debug *ar) {
+    (void)ar;
+    sandbox_state *st = sandbox_state_of(L);
+    if (!st) return;
+    st->used++;
+    if (st->budget > 0 && st->used > st->budget) {
+        st->exceeded = 1;
+        luaL_error(L, "instruction budget exceeded");
+    }
+}
+
+lua_State *wb_script_create_sandbox_state(wb_world *w, long budget) {
+    lua_State *L = luaL_newstate();
+    if (!L) return NULL;
+    luaL_openlibs(L);
+
+    lua_pushlightuserdata(L, w);
+    lua_setfield(L, LUA_REGISTRYINDEX, WB_META_WORLD);
+
+    /* wb.* capability table, visible to mods through the sandbox proxy */
+    luaL_newlib(L, kBindings);
+    lua_setglobal(L, "wb");
+
+    /* The sandbox _ENV: a fresh table whose __index is a whitelist proxy. */
+    lua_newtable(L);
+    lua_newtable(L);
+    lua_pushcfunction(L, sandbox_index);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, sandbox_newindex);
+    lua_setfield(L, -2, "__newindex");
+    lua_setmetatable(L, -2);
+    lua_setfield(L, LUA_REGISTRYINDEX, SANDBOX_ENV_KEY);
+
+    sandbox_state *st = (sandbox_state *)calloc(1, sizeof *st);
+    st->budget = budget;
+    lua_pushlightuserdata(L, st);
+    lua_setfield(L, LUA_REGISTRYINDEX, SANDBOX_STATE_KEY);
+
+    wb_script_set_budget(L, budget);
+    return L;
+}
+
+void wb_script_set_budget(lua_State *L, long budget) {
+    sandbox_state *st = sandbox_state_of(L);
+    if (!st) return;
+    st->budget = budget;
+    st->used = 0;
+    st->exceeded = 0;
+    if (budget > 0) lua_sethook(L, sandbox_hook, LUA_MASKCOUNT, 100);
+    else            lua_sethook(L, NULL, 0, 0);
+}
+
+/* Run a chunk of untrusted source under the sandbox: load it, swap in the
+ * sandbox _ENV, and call it. Returns 0 on success, -1 on error (message on
+ * the stack). */
+int wb_script_run_sandbox(lua_State *L, const char *src, size_t len,
+                          const char *chunkname) {
+    if (luaL_loadbuffer(L, src, len, chunkname) != LUA_OK) return -1;
+    /* stack: [fn] */
+    lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_ENV_KEY);
+    /* stack: [fn, env] */
+    if (!lua_setupvalue(L, -2, 1)) { lua_pop(L, 2); return -1; }  /* set _ENV */
+    /* stack: [fn] -- lua_setupvalue popped the env */
+    sandbox_state *st = sandbox_state_of(L);
+    if (st) { st->used = 0; st->exceeded = 0; }
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        fprintf(stderr, "mod: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+        return -1;
+    }
+    return 0;
+}
+
+/* Push a global from the sandbox env when one is installed, else the real
+ * globals. Mod globals live in the sandbox, so this is what the host must use
+ * to observe or call into a mod. */
+static void push_sandbox_global(lua_State *L, const char *name) {
+    lua_getfield(L, LUA_REGISTRYINDEX, SANDBOX_ENV_KEY);
+    if (lua_istable(L, -1)) {
+        lua_pushstring(L, name);
+        lua_rawget(L, -2);
+        lua_remove(L, -2);          /* drop the env table, leave the value */
+    } else {
+        lua_pop(L, 1);
+        lua_getglobal(L, name);
+    }
+}
+
+int wb_script_budget_exceeded(struct lua_State *L) {
+    sandbox_state *st = sandbox_state_of(L);
+    return st ? st->exceeded : 0;
+}
+
+/* Read a numeric global from a sandboxed state (tests / tooling). */
+int wb_script_get_sandbox_number(struct lua_State *L, const char *name, double *out) {
+    if (!L || !name || !out) return -1;
+    push_sandbox_global(L, name);
+    if (!lua_isnumber(L, -1)) { lua_pop(L, 1); return -1; }
+    *out = lua_tonumber(L, -1);
+    lua_pop(L, 1);
+    return 0;
 }
 
 void wb_physics_tick(wb_world *w, float dt) {

@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -110,6 +110,12 @@ TEST_AVATAR := build/wb_avatar_test.exe
 test-avatar: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_assets.c src/core/wb_json.c src/core/wb_avatar.c tests/wb_avatar_test.c -o $(TEST_AVATAR) -lm
 	./$(TEST_AVATAR)
+
+# test-mod: slice 15 -- untrusted mod sandbox (manifest, isolation, budget, reload)
+TEST_MOD := build/wb_mod_test.exe
+test-mod: build
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_json.c src/lua/wb_script.c src/lua/wb_mod.c tests/wb_mod_test.c $(LUA_SRC) -o $(TEST_MOD) -lm
+	./$(TEST_MOD)
 
 clean:
 	rm -rf build
