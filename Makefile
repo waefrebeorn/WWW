@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -116,6 +116,12 @@ TEST_MOD := build/wb_mod_test.exe
 test-mod: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_json.c src/lua/wb_script.c src/lua/wb_mod.c tests/wb_mod_test.c $(LUA_SRC) -o $(TEST_MOD) -lm
 	./$(TEST_MOD)
+
+# test-dist: slice 16 -- instances, discovery, matchmaking, portals
+TEST_DIST := build/wb_dist_test.exe
+test-dist: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_dist.c tests/wb_dist_test.c -o $(TEST_DIST) -lm
+	./$(TEST_DIST)
 
 clean:
 	rm -rf build

@@ -11,7 +11,7 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 12 | content pipeline | glTF/GLB import → GPU-ready, content-addressed DDC, manifest | `make test-assets` — 30 | ✅ |
 | 13 | networking | authoritative server, client prediction, AOI on the quadkey | `make test-net` — 28 | ✅ |
 | 14 | avatar + identity | glTF+VRM humanoid import, rig, cross-world identity | `make test-avatar` — 32 | ✅ |
-| 15 | modding sandbox | untrusted-code sandbox (Luau model), mod manifest, hot reload | `make test-mod` | ⬜ |
+| 15 | modding sandbox | untrusted-code sandbox (Luau model), mod manifest, hot reload | `make test-mod` — 21 | ✅ |
 | 16 | experience distribution | portals/stadiums, instance matchmaking, discovery hooks | `make test-exp2` | ⬜ |
 | 17 | editor | in-engine world editing + live edit | `make test-editor` | ⬜ |
 | 18 | server meshing | authority handover, per-component authority, persistent entity streaming | `make test-mesh` | ⬜ |
