@@ -3,7 +3,8 @@
  */
 #include "wb_mod.h"
 #include "wb_script.h"
-#include "../core/wb_json.h"
+#include "wb_json.h"
+#include "wb_util.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -26,45 +27,13 @@ struct wb_mod {
 static char g_manifest_err[256];
 const char *wb_mod_manifest_error(void) { return g_manifest_err[0] ? g_manifest_err : NULL; }
 
-static unsigned char *read_file(const char *path, size_t *out_len) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (n < 0) { fclose(f); return NULL; }
-    unsigned char *b = (unsigned char *)malloc((size_t)n + 1);
-    if (!b) { fclose(f); return NULL; }
-    size_t got = fread(b, 1, (size_t)n, f);
-    fclose(f);
-    b[got] = 0;
-    *out_len = got;
-    return b;
-}
-
-static int content_hash(const char *path, char out[17]) {
-    size_t len = 0;
-    unsigned char *b = read_file(path, &len);
-    if (!b) return -1;
-    uint64_t h = 1469598103934665603ULL;
-    for (size_t i = 0; i < len; i++) { h ^= b[i]; h *= 1099511628211ULL; }
-    free(b);
-    snprintf(out, 17, "%016llx", (unsigned long long)h);
-    return 0;
-}
-
-static void join(char *out, size_t out_sz, const char *dir, const char *name) {
-    if (dir && dir[0]) snprintf(out, out_sz, "%s/%s", dir, name);
-    else               snprintf(out, out_sz, "%s", name);
-}
-
 /* ------------------------------------------------------------- manifest */
 
 int wb_mod_manifest_load(const char *path, wb_mod_manifest *out) {
     g_manifest_err[0] = 0;
     memset(out, 0, sizeof *out);
     size_t len = 0;
-    unsigned char *file = read_file(path, &len);
+    unsigned char *file = wb_read_file(path, &len);
     if (!file) { snprintf(g_manifest_err, sizeof g_manifest_err, "cannot read %s", path); return -1; }
     wb_json *root = wb_json_parse((const char *)file, len);
     free(file);
@@ -112,9 +81,9 @@ wb_mod *wb_mod_load(const char *dir, const wb_mod_manifest *m, wb_world *w) {
     mod->w = w;
 
     char path[800];
-    join(path, sizeof path, dir, m->entry);
+    wb_join_path(path, sizeof path, dir, m->entry);
     size_t len = 0;
-    unsigned char *src = read_file(path, &len);
+    unsigned char *src = wb_read_file(path, &len);
     if (!src) {
         snprintf(mod->err, sizeof mod->err, "cannot read entry script %s", path);
         free(mod);
@@ -134,7 +103,7 @@ wb_mod *wb_mod_load(const char *dir, const wb_mod_manifest *m, wb_world *w) {
     }
     free(src);
 
-    if (content_hash(path, mod->source_hash) != 0) mod->source_hash[0] = 0;
+    if (wb_content_hash(path, mod->source_hash) != 0) mod->source_hash[0] = 0;
     return mod;
 }
 
@@ -158,9 +127,9 @@ int wb_mod_step(wb_mod *mod, double dt) {
 int wb_mod_reload(wb_mod *mod) {
     if (!mod) return -1;
     char path[800];
-    join(path, sizeof path, mod->dir, mod->manifest.entry);
+    wb_join_path(path, sizeof path, mod->dir, mod->manifest.entry);
     size_t len = 0;
-    unsigned char *src = read_file(path, &len);
+    unsigned char *src = wb_read_file(path, &len);
     if (!src) { snprintf(mod->err, sizeof mod->err, "cannot re-read %s", path); return -1; }
 
     /* fresh state: no stale globals from the previous version survive */
@@ -175,7 +144,7 @@ int wb_mod_reload(wb_mod *mod) {
         return -1;
     }
     free(src);
-    content_hash(path, mod->source_hash);
+    wb_content_hash(path, mod->source_hash);
     return 0;
 }
 
@@ -187,8 +156,8 @@ int wb_mod_get_global_number(wb_mod *mod, const char *name, double *out) {
 int wb_mod_needs_reload(const wb_mod *mod) {
     if (!mod || !mod->manifest.hot_reload || !mod->source_hash[0]) return 0;
     char path[800];
-    join(path, sizeof path, mod->dir, mod->manifest.entry);
+    wb_join_path(path, sizeof path, mod->dir, mod->manifest.entry);
     char now[17];
-    if (content_hash(path, now) != 0) return 0;
+    if (wb_content_hash(path, now) != 0) return 0;
     return strcmp(now, mod->source_hash) != 0;
 }

@@ -62,9 +62,8 @@ int wb_editor_can_redo(const wb_editor *ed) { return ed && ed->cursor < ed->nops
 /* ------------------------------------------------------------- applying */
 
 static int comp_index(wb_world *w, const char *name) {
-    for (uint32_t i = 0; i < w->comp_count; i++)
-        if (!strcmp(w->descs[i].name, name)) return (int)i;
-    return -1;
+    wb_comp_type t = wb_world_find_comp(w, name);
+    return t == (wb_comp_type)-1 ? -1 : (int)t;
 }
 
 static int apply_op(wb_editor *ed, const wb_edit_op *op, uint32_t *created) {
@@ -111,7 +110,7 @@ static int apply_op(wb_editor *ed, const wb_edit_op *op, uint32_t *created) {
             if (!c) { set_err(ed, "set_comp: component missing"); return -1; }
             /* Copy only as many bytes as the component actually holds -- a
              * 3-float memcpy into a 4-byte mass would overrun the column. */
-            size_t bytes = w->cols[op->comp].elem_size;
+            size_t bytes = wb_world_comp_elem_size(w, op->comp);
             if (bytes > 3 * sizeof(float)) bytes = 3 * sizeof(float);
             memcpy(c, op->a, bytes);
             return 0;
@@ -153,7 +152,7 @@ static void make_inverse(wb_editor *ed, const wb_edit_op *op, wb_edit_op *inv) {
             inv->comp = op->comp;
             void *c = wb_comp_get(w, (wb_entity){ op->entity, 0 }, op->comp);
             if (c) {
-                size_t bytes = w->cols[op->comp].elem_size;
+                size_t bytes = wb_world_comp_elem_size(w, op->comp);
                 if (bytes > sizeof inv->a) bytes = sizeof inv->a;
                 memcpy(inv->a, c, bytes);
             }

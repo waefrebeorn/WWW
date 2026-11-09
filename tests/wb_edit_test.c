@@ -18,8 +18,7 @@ static int g_pass = 0, g_fail = 0;
 static int nearly(float a, float b, float tol) { return fabsf(a - b) <= tol; }
 
 static wb_world *mk_world(void) {
-    wb_world *w = (wb_world *)calloc(1, sizeof *w);
-    wb_world_init(w);
+    wb_world *w = wb_world_new();
     wb_register_comp(w, "position", sizeof(float) * 3);
     wb_register_comp(w, "velocity", sizeof(float) * 3);
     wb_register_comp(w, "mass",     sizeof(float));
@@ -32,9 +31,9 @@ static int pos_t(void) { return 0; }
 /* After an undo/redo an entity can be recycled into a new handle, so look up
  * whichever entity is actually live rather than assuming index 0. */
 static wb_entity first_live(wb_world *w) {
-    for (uint32_t i = 0; i < w->next_index; i++) {
-        if (!w->alive[i]) continue;
-        wb_entity e = { i, w->gen[i] };
+    for (uint32_t i = 0; i < wb_world_next_index(w); i++) {
+        if (!wb_world_slot_alive(w, i)) continue;
+        wb_entity e = { i, wb_world_slot_gen(w, i) };
         if (wb_entity_valid(w, e)) return e;
     }
     wb_entity none = { 0, 0 };
@@ -152,8 +151,8 @@ int main(void) {
 
     wb_editor_free(ed);
     wb_editor_free(ed2);
-    wb_world_free(w);
-    wb_world_free(w2);
+    wb_world_destroy(w);
+    wb_world_destroy(w2);
 
     printf("\n=== EDIT TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

@@ -70,7 +70,7 @@ void wb_render_clear(wb_framebuffer *fb, uint32_t color) {
  * with spacing 'scale' horizontally/vertically, height comes from the
  * caller's sample() signature (x,y,z filled; z is the height). We treat the
  * grid's (x,y) as the horizontal plane and z as altitude for a land plate. */
-int wb_render_terrain(wb_framebuffer *fb, const wb_camera *cam,
+int wb_render_terrain(wb_framebuffer *fb, const wb_render_camera *cam,
                       const wb_terrain_plate *p) {
     int W=fb->width, H=fb->height, faces=0;
     size_t zbuf_n=(size_t)W*(size_t)H;

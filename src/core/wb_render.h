@@ -28,14 +28,15 @@ typedef struct {
     int       height;
 } wb_framebuffer;
 
-/* camera (world = meters, y-up) */
+/* camera (world = meters, y-up) -- named wb_render_camera to avoid colliding
+ * with the follow/orbit camera in wb_camera.h (both live in src/core). */
 typedef struct {
     float eye[3];       /* camera position */
     float at[3];        /* look target */
     float up[3];
     float vfov_deg;     /* vertical field of view */
     float near_z, far_z;
-} wb_camera;
+} wb_render_camera;
 
 /* heightfield accessor: world coord of sample (sx,sy) in [0,nx)x[0,ny) */
 typedef void (*wb_height_sample_fn)(void *user, int sx, int sy,
@@ -55,7 +56,7 @@ typedef struct {
 void wb_render_clear(wb_framebuffer *fb, uint32_t color);
 
 /* Draw a terrain plate from the camera. Returns face count rasterized. */
-int wb_render_terrain(wb_framebuffer *fb, const wb_camera *cam,
+int wb_render_terrain(wb_framebuffer *fb, const wb_render_camera *cam,
                       const wb_terrain_plate *plate);
 
 #endif /* WB_RENDER_H */

@@ -64,17 +64,17 @@ int main(void) {
     CHECK(wb_mod_manifest_error() != NULL, "the validation error is reported");
 
     /* ---- 2: a mod runs and can use wb.* ---------------------------- */
-    wb_world w; wb_world_init(&w);
-    wb_world_setup_comps(&w);
+    wb_world *w = wb_world_new();
+    wb_world_setup_comps(w);
 
-    wb_mod *good = wb_mod_load("build/mods/good", &mf, &w);
+    wb_mod *good = wb_mod_load("build/mods/good", &mf, w);
     CHECK(good != NULL, "mod loaded");
     if (good) {
         wb_mod_step(good, 1.0/60.0);
         double spawned = -1;
         CHECK(wb_mod_get_global_number(good, "spawned", &spawned) == 0 && spawned == 1,
               "the mod's step() ran and advanced its own state");
-        CHECK(wb_entity_count(&w) == 1, "the mod used the wb.* capability table");
+        CHECK(wb_entity_count(w) == 1, "the mod used the wb.* capability table");
         CHECK(!wb_mod_budget_exceeded(good), "no budget blow-out on a normal step");
         CHECK(wb_mod_needs_reload(good) == 0, "no reload pending for an unchanged file");
     }
@@ -92,7 +92,7 @@ int main(void) {
               "end\n");
     wb_mod_manifest emf;
     wb_mod_manifest_load("build/mods/evil/manifest.json", &emf);
-    wb_mod *evil = wb_mod_load("build/mods/evil", &emf, &w);
+    wb_mod *evil = wb_mod_load("build/mods/evil", &emf, w);
     CHECK(evil != NULL, "second mod loaded");
     if (evil) {
         wb_mod_step(evil, 1.0/60.0);
@@ -117,7 +117,7 @@ int main(void) {
               "function step(dt)\n  while true do end\nend\n");
     wb_mod_manifest lmf;
     wb_mod_manifest_load("build/mods/loop/manifest.json", &lmf);
-    wb_mod *loop = wb_mod_load("build/mods/loop", &lmf, &w);
+    wb_mod *loop = wb_mod_load("build/mods/loop", &lmf, w);
     CHECK(loop != NULL, "runaway mod loaded");
     if (loop) {
         int rc = wb_mod_step(loop, 1.0/60.0);
@@ -147,7 +147,7 @@ int main(void) {
     wb_mod_free(good);
     wb_mod_free(evil);
     wb_mod_free(loop);
-    wb_world_free(&w);
+    wb_world_destroy(w);
 
     printf("\n=== MOD TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

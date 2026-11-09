@@ -32,12 +32,45 @@ make run          # runs games/main.lua
 ## Layout
 
 ```
-src/core/        engine core (memory, ECS, physics)
-src/lua/         embedded Lua host + bindings
-thirdparty/      vendored deps (Lua 5.4)
+src/core/        engine core
+  wb_ecs            ECS: sparse-set + SoA (opaque world handle)
+  wb_spatial        quadkey lon/lat keying
+  wb_tiles          tile store + LRU streaming
+  wb_render         software 3D rasterizer
+  wb_exp            experience containers (one Lua state + ECS each)
+  wb_physics_*      MuJoCo: world / body / ECS binding
+  wb_gpu*           D3D12 RHI + render graph: dev / buffer / texture /
+                    shader / pass / exec
+  wb_assets_*       content pipeline: glTF parse / DDC / manifest
+  wb_avatar_*       avatar: bones / glTF load / anim sampling / identity
+  wb_edit           in-world editor (ops, undo/redo, JSON replay)
+  wb_dist           experience distribution (instances, matchmaking, portals)
+  wb_util           shared helpers: file IO, hashing, error buffer, paths
+  wb_gltf           shared glTF accessor decoding
+src/lua/         Lua 5.4 host + bindings + modding sandbox
+src/lv/          slerm-Lua interpreter: arena / value / lex / parse / eval / host
+src/net/         networking: AOI / server / client / loopback + server meshing
+thirdparty/      vendored deps (Lua 5.4, MuJoCo)
+tests/           one harness per module; `make test` runs every gate
 games/           Lua game scripts
 docs/            design notes
 ```
+
+## Module rules
+
+- **Opaque structs.** Module state is a handle created by a `_new`/`_create`
+  call (`wb_world_new()`, `wb_gpu_create()`, `wb_physics_new()`, ...). The
+  struct definition lives in a private `*_internal.h` included only by that
+  module's own `.c` files, so no caller can reach into it.
+- **Minimal includes.** Include what you use. A header covers one concern --
+  e.g. `wb_net.h` is the shared wire types + AOI, while the server, client and
+  loopback transports have their own headers.
+- **No god headers.** Nothing pulls in a whole subsystem to declare one type.
+- **C11 only.** (The D3D12 backend is compiled as C++ behind `extern "C"`
+  because MinGW's `d3d12.h` exposes C++ interfaces; the API stays C11.)
+- **No duplicated helpers.** Shared code lives in `wb_util` (file IO, FNV-1a
+  content hash, error buffer, path join) and `wb_gltf` (accessor decoding).
+  Do not re-implement them per module.
 
 ## Roadmap (from the metaverse read)
 

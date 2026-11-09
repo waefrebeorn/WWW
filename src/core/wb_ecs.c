@@ -1,23 +1,61 @@
+/*
+ * wb_ecs.c -- WuBu Engine entity-component-system core. See wb_ecs.h.
+ */
 #include "wb_ecs.h"
 #include <stdlib.h>
 #include <string.h>
 
-/* bit helpers (declared here; wb_ecs.h keeps the iter API) */
+/* A registered component type: name + element size for its SoA column. */
+typedef struct {
+    const char *name;
+    size_t      elem_size;
+} wb_comp_desc;
+
+/* Component column: contiguous SoA storage, grown by pool doubling. */
+typedef struct {
+    uint8_t *data;      /* elem_size * capacity */
+    uint8_t *present;   /* bitmask per index: slot has this comp */
+    size_t   elem_size;
+    size_t   capacity;
+} wb_column;
+
+struct wb_world {
+    /* dense entity pool */
+    uint32_t *      gen;        /* generation per dense slot */
+    uint8_t *       alive;      /* slot occupied */
+    uint32_t        count;      /* live entities */
+    uint32_t        next_index; /* bump allocator index (before recycle) */
+
+    /* component registry */
+    wb_comp_desc    descs[WB_MAX_COMP_TYPES];
+    wb_column       cols[WB_MAX_COMP_TYPES];
+    uint32_t        comp_count;
+
+    uint64_t        tick;
+};
+
+/* bit helpers */
 static inline int bit_get(const uint8_t *bm, uint32_t i){return (bm[i>>3]>>(i&7))&1;}
 static inline void bit_set(uint8_t *bm, uint32_t i){bm[i>>3] |= (1u<<(i&7));}
 static inline void bit_clear(uint8_t *bm, uint32_t i){bm[i>>3] &= ~(1u<<(i&7));}
 
 /* --- world lifecycle --- */
 
-void wb_world_init(wb_world *w) {
-    memset(w, 0, sizeof(*w));
-    w->gen = calloc(WB_MAX_ENTITIES, sizeof(uint32_t));
-    w->alive = calloc(WB_MAX_ENTITIES, 1);
-    w->count = 0;
-    w->next_index = 0;
+wb_world *wb_world_new(void) {
+    wb_world *w = (wb_world *)calloc(1, sizeof *w);
+    if (!w) return NULL;
+    w->gen = (uint32_t *)calloc(WB_MAX_ENTITIES, sizeof(uint32_t));
+    w->alive = (uint8_t *)calloc(WB_MAX_ENTITIES, 1);
+    if (!w->gen || !w->alive) {
+        free(w->gen);
+        free(w->alive);
+        free(w);
+        return NULL;
+    }
+    return w;
 }
 
-void wb_world_free(wb_world *w) {
+void wb_world_destroy(wb_world *w) {
     if (!w) return;
     for (uint32_t t = 0; t < WB_MAX_COMP_TYPES; t++) {
         if (w->cols[t].data) free(w->cols[t].data);
@@ -25,7 +63,42 @@ void wb_world_free(wb_world *w) {
     }
     free(w->gen);
     free(w->alive);
-    memset(w, 0, sizeof(*w));
+    free(w);
+}
+
+/* --- read-only accessors --- */
+
+uint32_t wb_world_next_index(const wb_world *w) { return w ? w->next_index : 0; }
+int      wb_world_slot_alive(const wb_world *w, uint32_t i) {
+    return w && i < w->next_index && w->alive[i];
+}
+uint32_t wb_world_slot_gen(const wb_world *w, uint32_t i) {
+    return (w && i < WB_MAX_ENTITIES) ? w->gen[i] : 0;
+}
+
+wb_comp_type wb_world_find_comp(const wb_world *w, const char *name) {
+    if (!w || !name) return (wb_comp_type)-1;
+    for (uint32_t i = 0; i < w->comp_count; i++)
+        if (w->descs[i].name && strcmp(w->descs[i].name, name) == 0) return (wb_comp_type)i;
+    return (wb_comp_type)-1;
+}
+
+size_t wb_world_comp_elem_size(const wb_world *w, wb_comp_type t) {
+    return (w && t < w->comp_count) ? w->cols[t].elem_size : 0;
+}
+
+void *wb_world_comp_data(const wb_world *w, wb_comp_type t) {
+    return (w && t < w->comp_count) ? w->cols[t].data : NULL;
+}
+
+size_t wb_world_comp_capacity(const wb_world *w, wb_comp_type t) {
+    return (w && t < w->comp_count) ? w->cols[t].capacity : 0;
+}
+
+int wb_world_comp_present(const wb_world *w, wb_comp_type t, uint32_t i) {
+    if (!w || t >= w->comp_count) return 0;
+    const wb_column *c = &w->cols[t];
+    return i < c->capacity && bit_get(c->present, i);
 }
 
 /* --- component registration --- */
@@ -45,8 +118,8 @@ static void col_grow(wb_column *c, uint32_t need) {
     if (need <= c->capacity) return;
     size_t cap = c->capacity ? c->capacity : 8u;
     while (cap < need) cap *= 2u;
-    c->data = realloc(c->data, cap * c->elem_size);
-    c->present = realloc(c->present, cap);
+    c->data = (uint8_t *)realloc(c->data, cap * c->elem_size);
+    c->present = (uint8_t *)realloc(c->present, cap);
     if (c->capacity) {
         memset(c->present + c->capacity, 0, cap - c->capacity);
     } else {
@@ -89,7 +162,7 @@ int wb_entity_valid(const wb_world *w, wb_entity e) {
     return e.index < w->next_index && w->alive[e.index] && w->gen[e.index] == e.gen;
 }
 
-uint32_t wb_entity_count(const wb_world *w) { return w->count; }
+uint32_t wb_entity_count(const wb_world *w) { return w ? w->count : 0; }
 
 /* --- components --- */
 
@@ -117,7 +190,7 @@ void wb_comp_remove(wb_world *w, wb_entity e, wb_comp_type t) {
 void wb_comp_iter(const wb_world *w, wb_comp_type t, wb_comp_iter_cb cb, void *user) {
     if (t >= w->comp_count) return;
     const wb_column *c = &w->cols[t];
-    uint32_t n = w->next_index < c->capacity ? w->next_index : c->capacity;
+    uint32_t n = w->next_index < c->capacity ? w->next_index : (uint32_t)c->capacity;
     for (uint32_t i = 0; i < n; i++) {
         if (bit_get(c->present, i))
             cb(c->data + (size_t)i * c->elem_size, user);

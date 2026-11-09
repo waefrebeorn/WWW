@@ -4,15 +4,17 @@
  * The "meta" in meta engine: an avatar that persists across experiences.
  * Imports the glTF skin (joints + inverse bind matrices), maps joints onto the
  * standard humanoid rig (the VRM / Unity Humanoid bone set, which Khronos and
- * the VRM Consortium are converging on), samples glTF animations, and stores a
- * small identity record so the same avatar walks into any world.
+ * the VRM Consortium are converging on), and stores a small identity record so
+ * the same avatar walks into any world. Animation clips and the sampler live in
+ * wb_anim.h; mesh loading in wb_assets.h.
  *
  * C11, no external deps.
  */
 #ifndef WB_AVATAR_H
 #define WB_AVATAR_H
 
-#include "wb_assets.h"
+#include "wb_assets.h"   /* wb_model */
+#include "wb_anim.h"     /* wb_animation */
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,8 +42,6 @@ typedef enum {
 } wb_bone;
 
 #define WB_AVATAR_MAX_JOINTS 128
-#define WB_AVATAR_MAX_CHAN   256
-#define WB_AVATAR_MAX_KEYS   64
 
 typedef struct {
     int  node;          /* glTF node index, -1 when unmapped */
@@ -57,29 +57,6 @@ typedef struct {
     float       inv_bind[WB_AVATAR_MAX_JOINTS][16];  /* column-major mat4 */
 } wb_rig;
 
-typedef struct {
-    int   node;
-    int   path;          /* 0 = translation, 1 = rotation (quat), 2 = scale */
-    int   nkeys;
-    float times[WB_AVATAR_MAX_KEYS];
-    float values[WB_AVATAR_MAX_KEYS][4];
-} wb_anim_channel;
-
-/* A node's rest (bind-pose) TRS, used as the base an animation overrides. */
-typedef struct {
-    float t[3];
-    float q[4];          /* x, y, z, w */
-    float s[3];
-} wb_trs;
-
-typedef struct {
-    char            name[64];
-    wb_anim_channel channels[WB_AVATAR_MAX_CHAN];
-    int             nchannels;
-    float           duration;
-    wb_trs          rest[256];   /* indexed by glTF node index */
-} wb_animation;
-
 /* A persistent identity: which avatar, which rig, how tall. */
 typedef struct {
     char  avatar_id[64];
@@ -94,12 +71,6 @@ const char *wb_avatar_error(void);
  * and up to `max_anims` animations. Returns 0 on success. */
 int wb_avatar_load(const char *path, wb_model *out_model, wb_rig *out_rig,
                    wb_animation *out_anims, int max_anims, int *out_nanims);
-
-/* Sample an animation at time `t` (seconds, clamped to the clip). Writes a
- * column-major local TRS mat4 per glTF node into `out_local` (max_nodes
- * entries). Nodes with no channel keep identity. Returns the number written. */
-int wb_avatar_sample(const wb_animation *a, float t,
-                     float out_local[][16], int max_nodes);
 
 /* Identity persistence (JSON). */
 int wb_avatar_identity_save(const char *path, const wb_avatar *a);

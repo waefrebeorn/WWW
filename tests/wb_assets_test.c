@@ -8,6 +8,8 @@
  *   manifest -> write, load, verify (and detect a modified asset)
  */
 #include "wb_assets.h"
+#include "wb_ddc.h"
+#include "wb_manifest.h"
 
 #include <stdio.h>
 #include <stdlib.h>

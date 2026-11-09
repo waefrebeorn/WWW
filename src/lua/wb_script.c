@@ -298,14 +298,17 @@ int wb_script_get_sandbox_number(struct lua_State *L, const char *name, double *
 
 void wb_physics_tick(wb_world *w, float dt) {
     float drag = 0.995f;
-    for (uint32_t i = 0; i < w->next_index; i++) {
-        if (!w->alive[i]) continue;
-        uint8_t *vpre = w->cols[VEL].present;
-        uint8_t *pre = w->cols[POS].present;
-        if (!(pre[i >> 3] >> (i & 7) & 1)) continue;
-        if (!(vpre[i >> 3] >> (i & 7) & 1)) continue;
-        float *p = (float *)(w->cols[POS].data + (size_t)i * w->cols[POS].elem_size);
-        float *v = (float *)(w->cols[VEL].data + (size_t)i * w->cols[VEL].elem_size);
+    uint32_t n = wb_world_next_index(w);
+    size_t psize = wb_world_comp_elem_size(w, POS);
+    size_t vsize = wb_world_comp_elem_size(w, VEL);
+    uint8_t *pbase = (uint8_t *)wb_world_comp_data(w, POS);
+    uint8_t *vbase = (uint8_t *)wb_world_comp_data(w, VEL);
+    for (uint32_t i = 0; i < n; i++) {
+        if (!wb_world_slot_alive(w, i)) continue;
+        if (!wb_world_comp_present(w, POS, i)) continue;
+        if (!wb_world_comp_present(w, VEL, i)) continue;
+        float *p = (float *)(pbase + (size_t)i * psize);
+        float *v = (float *)(vbase + (size_t)i * vsize);
         for (int c = 0; c < 3; c++) {
             v[c] *= drag;
             p[c] += v[c] * dt;

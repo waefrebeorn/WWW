@@ -36,13 +36,12 @@ wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
     e->cell = cfg->cell;
     e->tick = 0;
 
-    e->world = malloc(sizeof(wb_world));
+    e->world = wb_world_new();
     if (!e->world) { free(e); return NULL; }
-    wb_world_init(e->world);
     wb_world_setup_comps(e->world);
 
     e->L = wb_script_create_state(e->world);
-    if (!e->L) { wb_world_free(e->world); free(e->world); free(e); return NULL; }
+    if (!e->L) { wb_world_destroy(e->world); free(e); return NULL; }
 
     if (luaL_dofile(e->L, cfg->lua_path) == LUA_OK) {
         return e;   /* gamemode script loaded into this instance */
@@ -58,7 +57,7 @@ wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
 void wb_exp_dispose(wb_exp *e) {
     if (!e) return;
     if (e->L) lua_close(e->L);
-    if (e->world) { wb_world_free(e->world); free(e->world); }
+    if (e->world) wb_world_destroy(e->world);
     free(e);
 }
 

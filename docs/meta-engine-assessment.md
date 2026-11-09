@@ -36,7 +36,8 @@ src/core/wb_tiles.c|h      tile store + LRU             49 tests
 src/core/wb_render.c|h     software 3D rasterizer        6 tests
 src/core/wb_exp.c|h        experience containers        15 tests
 src/lua/wb_script.c|h      Lua 5.4 host + bindings       (engine runs)
-src/lv/wb_lv.c|h           slerm-Lua tree-walker     17+5 tests
+src/lv/wb_lv*.c|h          slerm-Lua tree-walker     17+5 tests
+                           (arena / value / lex / parse / eval / host)
                            -------------------------------------
                            2,318 LOC · 255 assertions · 0 fail
 ```

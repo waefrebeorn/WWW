@@ -38,7 +38,7 @@ int main(void){
     static uint32_t buf[W*H];
     wb_framebuffer fb={.pixels=buf,.width=W,.height=H};
 
-    wb_camera cam;
+    wb_render_camera cam;
     cam.eye[0]=8.0f; cam.eye[1]=14.0f; cam.eye[2]=6.0f; /* above and in front */
     cam.at[0]=8.0f;  cam.at[1]=0.0f;  cam.at[2]=0.0f;
     cam.up[0]=0.0f;  cam.up[1]=0.0f;  cam.up[2]=1.0f;    /* z up */

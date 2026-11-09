@@ -108,20 +108,20 @@ int main(void) {
                                       (double[3]){0.2, 0.2, 0.2}, 1.0);
         CHECK(wb_physics_build(p) == 0, "bound world built");
 
-        wb_world w; wb_world_init(&w);
-        wb_register_comp(&w, "position", sizeof(float) * 3);
-        wb_register_comp(&w, "velocity", sizeof(float) * 3);
-        wb_entity e = wb_entity_new(&w);
-        float *pos = (float *)wb_comp_add(&w, e, 0);
+        wb_world *w = wb_world_new();
+        wb_register_comp(w, "position", sizeof(float) * 3);
+        wb_register_comp(w, "velocity", sizeof(float) * 3);
+        wb_entity e = wb_entity_new(w);
+        float *pos = (float *)wb_comp_add(w, e, 0);
         pos[0] = pos[1] = pos[2] = 0.0f;
 
         wb_physics_bind(p, box, e);
         CHECK(wb_physics_bind_count(p) == 1, "one binding registered");
 
         for (int i = 0; i < 300; i++) {
-            wb_physics_sync_in(p, &w);
+            wb_physics_sync_in(p, w);
             wb_physics_step(p, 0.002);
-            wb_physics_sync_out(p, &w);
+            wb_physics_sync_out(p, w);
         }
         double bp[3]; wb_physics_get_pos(p, box, bp);
         CHECK(nearly(pos[0], bp[0], 1e-4) && nearly(pos[1], bp[1], 1e-4) &&
@@ -130,7 +130,7 @@ int main(void) {
         CHECK(pos[2] > 0.15 && pos[2] < 0.25,
               "bound crate settled on the plane (z ~ 0.20)");
 
-        wb_world_free(&w);
+        wb_world_destroy(w);
         wb_physics_free(p);
     }
 

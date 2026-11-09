@@ -11,7 +11,10 @@
  *   - packet loss does not break convergence
  */
 #include "wb_net.h"
-#include "../core/wb_spatial.h"
+#include "wb_net_server.h"
+#include "wb_net_client.h"
+#include "wb_net_loopback.h"
+#include "wb_spatial.h"
 
 #include <stdio.h>
 #include <string.h>
