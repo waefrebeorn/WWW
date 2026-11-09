@@ -22,7 +22,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -122,6 +122,12 @@ TEST_DIST := build/wb_dist_test.exe
 test-dist: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_dist.c tests/wb_dist_test.c -o $(TEST_DIST) -lm
 	./$(TEST_DIST)
+
+# test-edit: slice 17 -- in-world editor (edits, undo/redo, save/replay)
+TEST_EDIT := build/wb_edit_test.exe
+test-edit: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_ecs.c src/core/wb_json.c src/core/wb_edit.c tests/wb_edit_test.c -o $(TEST_EDIT) -lm
+	./$(TEST_EDIT)
 
 clean:
 	rm -rf build
