@@ -1,0 +1,7 @@
+build/
+*.o
+*.exe
+*.rbxl
+.vscode/
+.idea/
+thirdparty/redot/
