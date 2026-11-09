@@ -14,6 +14,8 @@ struct wb_worldspace {
     wb_spawn_set    **spawns;
     char            **dirs;
     int nmodes, cap;
+    wb_worldspace_portal *portals;      /* stadium gates                        */
+    int nportals, pcap;
 };
 
 wb_worldspace *wb_worldspace_open(void) {
@@ -33,6 +35,7 @@ void wb_worldspace_close(wb_worldspace *ws) {
     free(ws->modes);
     free(ws->spawns);
     free(ws->dirs);
+    free(ws->portals);
     wb_dist_registry_free(ws->reg);
     free(ws);
 }
@@ -124,10 +127,10 @@ wb_dist_registry *wb_worldspace_registry(wb_worldspace *ws) {
     return ws ? ws->reg : NULL;
 }
 
-int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
-                        const wb_mode_config *cfg, const char *player_id,
-                        int team, char *out_instance, float out_pos[3],
-                        char *err, size_t err_sz) {
+static int spawn_into(wb_worldspace *ws, const char *gamemode,
+                      const wb_mode_config *cfg, const char *player_id,
+                      int team, const char *tag, char *out_instance,
+                      float out_pos[3], char *err, size_t err_sz) {
     if (!ws || !gamemode) {
         if (err) snprintf(err, err_sz, "null worldspace or gamemode");
         return -1;
@@ -148,12 +151,13 @@ int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
     if (wb_mode_config_validate(m, use, err, err_sz) != 0) return -1;
 
     /* Pick the spawn point FIRST. A mode with no free spawn must fail without
-     * leaving an empty instance behind. */
+     * leaving an empty instance behind. `tag` prefers a landing spawn. */
     int si = -1, idx = -1;
     for (int i = 0; i < ws->nmodes; i++) {
         if (strcmp(ws->modes[i].name, gamemode)) continue;
         si = i;
-        idx = wb_spawn_pick(ws->spawns[i], gamemode, team, out_pos);
+        idx = tag ? wb_spawn_pick_tag(ws->spawns[i], gamemode, team, tag, out_pos)
+                  : wb_spawn_pick(ws->spawns[i], gamemode, team, out_pos);
         break;
     }
     if (si < 0) {
@@ -162,8 +166,9 @@ int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
     }
     if (idx < 0) {
         if (err) snprintf(err, err_sz,
-                          "gametype '%s' has no spawn point for team %d",
-                          gamemode, team);
+                          "gametype '%s' has no spawn point for team %d%s%s",
+                          gamemode, team,
+                          tag ? " / tag '" : "", tag ? tag : "");
         return -1;
     }
 
@@ -181,4 +186,83 @@ int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
 
     wb_spawn_occupy(ws->spawns[si], idx);
     return 0;
+}
+
+int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
+                        const wb_mode_config *cfg, const char *player_id,
+                        int team, char *out_instance, float out_pos[3],
+                        char *err, size_t err_sz) {
+    return spawn_into(ws, gamemode, cfg, player_id, team, NULL,
+                      out_instance, out_pos, err, err_sz);
+}
+
+/* ------------------------------------------------------------------ portals
+ * The Yu-Gi-Oh stadium mechanic -- see wb_worldspace.h. */
+
+int wb_worldspace_add_portal(wb_worldspace *ws, const char *src_gamemode,
+                             const float pos[3], float radius,
+                             const char *dst_gamemode, const char *dst_tag) {
+    if (!ws || !src_gamemode || !pos || !dst_gamemode) return -1;
+    if (ws->nportals >= ws->pcap) {
+        int nc = ws->pcap ? ws->pcap * 2 : 8;
+        wb_worldspace_portal *np =
+            (wb_worldspace_portal *)realloc(ws->portals, (size_t)nc * sizeof *np);
+        if (!np) return -1;
+        ws->portals = np; ws->pcap = nc;
+    }
+    wb_worldspace_portal *p = &ws->portals[ws->nportals];
+    memset(p, 0, sizeof *p);
+    p->active = 1;
+    p->pos[0] = pos[0]; p->pos[1] = pos[1]; p->pos[2] = pos[2];
+    p->radius = radius > 0 ? radius : 1.0f;
+    snprintf(p->src_gamemode, sizeof p->src_gamemode, "%s", src_gamemode);
+    snprintf(p->dst_gamemode, sizeof p->dst_gamemode, "%s", dst_gamemode);
+    if (dst_tag) snprintf(p->dst_tag, sizeof p->dst_tag, "%s", dst_tag);
+    return ws->nportals++;
+}
+
+int wb_worldspace_portal_count(const wb_worldspace *ws) { return ws ? ws->nportals : 0; }
+
+const wb_worldspace_portal *wb_worldspace_get_portal(const wb_worldspace *ws, int index) {
+    if (!ws || index < 0 || index >= ws->nportals) return NULL;
+    return &ws->portals[index];
+}
+
+int wb_worldspace_portal_at(const wb_worldspace *ws, const char *src_gamemode,
+                            const float pos[3], wb_worldspace_portal *out) {
+    if (!ws || !src_gamemode || !pos) return 0;
+    for (int i = 0; i < ws->nportals; i++) {
+        wb_worldspace_portal *p = &ws->portals[i];
+        if (!p->active) continue;
+        if (strcmp(p->src_gamemode, src_gamemode)) continue;
+        float dx = p->pos[0] - pos[0], dy = p->pos[1] - pos[1], dz = p->pos[2] - pos[2];
+        float d2 = dx * dx + dy * dy + dz * dz;
+        float r2 = p->radius * p->radius;
+        if (d2 <= r2) { if (out) *out = *p; return 1; }
+    }
+    return 0;
+}
+
+int wb_worldspace_travel(wb_worldspace *ws, int portal_index,
+                         const char *player_id, const wb_mode_config *cfg,
+                         int team, char *out_instance, float out_pos[3],
+                         char *err, size_t err_sz) {
+    if (!ws || portal_index < 0 || portal_index >= ws->nportals) {
+        if (err) snprintf(err, err_sz, "bad stadium portal index");
+        return -1;
+    }
+    if (!player_id || !player_id[0]) {
+        if (err) snprintf(err, err_sz, "a traveller needs a player_id");
+        return -1;
+    }
+    wb_worldspace_portal *p = &ws->portals[portal_index];
+    if (!p->active) {
+        if (err) snprintf(err, err_sz, "stadium portal is inactive");
+        return -1;
+    }
+    /* detach from every world, then materialize into the destination */
+    wb_dist_registry_leave_player(ws->reg, player_id);
+    return spawn_into(ws, p->dst_gamemode, cfg, player_id, team,
+                      p->dst_tag[0] ? p->dst_tag : NULL,
+                      out_instance, out_pos, err, err_sz);
 }

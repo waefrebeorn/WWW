@@ -38,7 +38,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -176,6 +176,12 @@ TEST_WS := build/wb_worldspace_test.exe
 test-worldspace: build
 	$(CC) $(CFLAGS) -Isrc/core $(WORLDSPACE_SRC) tests/wb_worldspace_test.c -o $(TEST_WS) -lm
 	./$(TEST_WS)
+
+# test-portal: slice 20 -- the Yu-Gi-Oh stadium mechanic (portal travel)
+TEST_PORTAL := build/wb_portal_test.exe
+test-portal: build
+	$(CC) $(CFLAGS) -Isrc/core $(WORLDSPACE_SRC) tests/wb_portal_test.c -o $(TEST_PORTAL) -lm
+	./$(TEST_PORTAL)
 
 clean:
 	rm -rf build

@@ -82,6 +82,26 @@ int wb_spawn_pick(wb_spawn_set *s, const char *gamemode, int team, float out[3])
     return -1;
 }
 
+/* Like wb_spawn_pick but prefer a point with `tag` (a portal's "landing"
+ * zone); falls back to any matching point when none carries the tag. `tag`
+ * NULL/empty means plain wb_spawn_pick. Deterministic (lowest index). */
+int wb_spawn_pick_tag(wb_spawn_set *s, const char *gamemode, int team,
+                      const char *tag, float out[3]) {
+    if (!s || !tag || !tag[0]) return wb_spawn_pick(s, gamemode, team, out);
+    int fallback = wb_spawn_pick(s, gamemode, team, out);
+    for (int i = 0; i < s->count; i++) {
+        if (!point_matches(&s->pts[i], gamemode, team)) continue;
+        if (strcmp(s->pts[i].tag, tag)) continue;
+        if (out) {
+            out[0] = s->pts[i].pos[0];
+            out[1] = s->pts[i].pos[1];
+            out[2] = s->pts[i].pos[2];
+        }
+        return i;
+    }
+    return fallback;
+}
+
 void wb_spawn_occupy(wb_spawn_set *s, int index) {
     if (!s || index < 0 || index >= s->count) return;
     s->pts[index].occupied = 1;

@@ -70,6 +70,10 @@ void  wb_dist_registry_remove(wb_dist_registry *r, const char *id);
 int   wb_dist_registry_count(const wb_dist_registry *r);
 wb_dist_instance *wb_dist_registry_find(wb_dist_registry *r, const char *id);
 
+/* Detach `player_id` from every instance they are in (portal travel away from
+ * a world). Empty instances are reaped. Returns the number of instances left. */
+int wb_dist_registry_leave_player(wb_dist_registry *r, const char *player_id);
+
 /* Snapshot the directory (does not transfer ownership). */
 int   wb_dist_registry_list(const wb_dist_registry *r, wb_dist_info *out, int max);
 

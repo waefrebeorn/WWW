@@ -46,6 +46,11 @@ const wb_spawn_point *wb_spawn_get(const wb_spawn_set *s, int index);
  * Returns the index, or -1 when nothing is suitable. */
 int wb_spawn_pick(wb_spawn_set *s, const char *gamemode, int team, float out[3]);
 
+/* wb_spawn_pick that prefers a point carrying `tag` (a portal's landing zone),
+ * falling back to any matching point. tag NULL/empty == wb_spawn_pick. */
+int wb_spawn_pick_tag(wb_spawn_set *s, const char *gamemode, int team,
+                      const char *tag, float out[3]);
+
 /* Reserve / release a picked point, so two players do not stack. */
 void wb_spawn_occupy(wb_spawn_set *s, int index);
 void wb_spawn_release(wb_spawn_set *s, int index);

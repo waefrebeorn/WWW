@@ -65,6 +65,49 @@ int wb_worldspace_spawn(wb_worldspace *ws, const char *gamemode,
                         int team, char *out_instance /* WB_DIST_ID_LEN */,
                         float out_pos[3], char *err, size_t err_sz);
 
+/* ------------------------------------------------------------------ portals
+ * The Yu-Gi-Oh stadium mechanic: the hub world is a 1:1 mirror-slice of the
+ * universe, and a stadium is a game space the player steps INTO. A portal is a
+ * volume in a source gamemode that, when a player walks in, detaches them from
+ * every world they are in and spawns them into another gamemode's instance at
+ * a tagged landing spawn -- the same player identity carried across (the OASIS
+ * travel contract). */
+
+#define WB_WORLDSPACE_DST_LEN 128
+#define WB_WORLDSPACE_TAG_LEN 64
+
+typedef struct {
+    int   active;
+    float pos[3];                 /* centre of the gate volume              */
+    float radius;                 /* entry radius (walk-in)                 */
+    char  src_gamemode[WB_WORLDSPACE_DST_LEN];
+    char  dst_gamemode[WB_WORLDSPACE_DST_LEN];
+    char  dst_tag[WB_WORLDSPACE_TAG_LEN];   /* landing spawn tag, empty = any */
+} wb_worldspace_portal;
+
+/* Declare a stadium gate: players inside this volume of `src_gamemode` travel
+ * to `dst_gamemode` (at `dst_tag` when set). Returns the portal index >= 0. */
+int wb_worldspace_add_portal(wb_worldspace *ws, const char *src_gamemode,
+                             const float pos[3], float radius,
+                             const char *dst_gamemode, const char *dst_tag);
+
+int  wb_worldspace_portal_count(const wb_worldspace *ws);
+const wb_worldspace_portal *wb_worldspace_get_portal(const wb_worldspace *ws, int index);
+
+/* 1 if `pos` is inside any stadium gate of `src_gamemode` (the walk-in); the
+ * first matching portal is copied into `out` (may be NULL). 0 otherwise. */
+int wb_worldspace_portal_at(const wb_worldspace *ws, const char *src_gamemode,
+                            const float pos[3], wb_worldspace_portal *out);
+
+/* THE travel call: a player standing in stadium portal `portal_index` leaves
+ * every instance they are in and is spawned into the portal's destination
+ * gamemode at its landing tag. `cfg` NULL = schema defaults. On success
+ * returns 0, out_instance = the destination world id, out_pos = the landing. */
+int wb_worldspace_travel(wb_worldspace *ws, int portal_index,
+                         const char *player_id, const wb_mode_config *cfg,
+                         int team, char *out_instance, float out_pos[3],
+                         char *err, size_t err_sz);
+
 #ifdef __cplusplus
 }
 #endif

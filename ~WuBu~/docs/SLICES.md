@@ -1,4 +1,4 @@
-# Slices 9–18 — kernel → meta engine
+# Slices 9–20 — kernel → meta engine → the Yu-Gi-Oh stadium
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 Each slice ships real, tested code; nothing is marked done without a green gate.
@@ -16,14 +16,15 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 17 | editor | in-engine world editing + live edit | `make test-edit` — 37 | ✅ |
 | 18 | server meshing | authority handover, per-component authority, persistent entity streaming | `make test-mesh` — 37 | ✅ |
 | 19 | gametypes | mode manifests + typed config schema, spawn points, the spawn-a-worldspace facade | `make test-mode` — 42 · `make test-spawn` — 37 · `make test-worldspace` — 53 | ✅ |
+| 20 | stadium travel | Yu-Gi-Oh portals: walk into a gate, leave every world, spawn into another gametype's instance at a tagged landing, same identity, empty source reaped | `make test-portal` — 22 | ✅ |
 
 ## Running totals
 
-`make test` currently: **20 gates, 705 assertions, 0 fail.**
+`make test` currently: **21 gates, 727 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 6 · EXP 15 · LV 17 · LV-SCRIPT 5 ·
 PHYSICS 27 · CHARACTER 14 · GPU 26 · ASSETS 30 · NET 28 · AVATAR 32 · MOD 21 ·
-DIST 41 · EDIT 37 · MESH 37 · MODE 42 · SPAWN 37 · WORLDSPACE 53.
+DIST 41 · EDIT 37 · MESH 37 · MODE 42 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22.
 
 ## Design rules carried forward
 

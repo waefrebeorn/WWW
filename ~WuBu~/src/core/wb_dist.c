@@ -125,6 +125,22 @@ void wb_dist_registry_remove(wb_dist_registry *r, const char *id) {
     }
 }
 
+/* Remove `player_id` from EVERY instance (a portal travel detaches them from
+ * whichever world they were in). Returns how many instances they left. */
+int wb_dist_registry_leave_player(wb_dist_registry *r, const char *player_id) {
+    if (!r || !player_id) return 0;
+    int left = 0;
+    for (int i = 0; i < r->count; i++) {
+        if (wb_dist_instance_leave(r->instances[i], player_id) == 1) left++;
+        if (r->instances[i]->nplayers <= 0) {          /* empty world is reaped */
+            wb_dist_instance_free(r->instances[i]);
+            if (i != r->count - 1) r->instances[i] = r->instances[r->count - 1];
+            r->count--; i--;
+        }
+    }
+    return left;
+}
+
 int wb_dist_registry_count(const wb_dist_registry *r) { return r ? r->count : 0; }
 
 wb_dist_instance *wb_dist_registry_find(wb_dist_registry *r, const char *id) {
