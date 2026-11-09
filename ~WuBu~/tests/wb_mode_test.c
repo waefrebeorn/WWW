@@ -31,6 +31,11 @@ static const char *kModeJson =
     "    {\"name\": \"friendly_fire\", \"type\": \"bool\", \"default\": \"false\"},\n"
     "    {\"name\": \"zone_start_radius\", \"type\": \"float\", \"min\": 50, \"max\": 5000, \"default\": \"800\"},\n"
     "    {\"name\": \"map\", \"type\": \"string\", \"default\": \"island\"}\n"
+    "  ],\n"
+    "  \"spawns\": [\n"
+    "    {\"pos\": [0, 0, 0], \"team\": -1, \"tag\": \"arrival\"},\n"
+    "    {\"pos\": [40, 0, 0], \"team\": 0, \"tag\": \"red\"},\n"
+    "    {\"pos\": [-40, 0, 0], \"team\": 1, \"tag\": \"blue\"}\n"
     "  ]\n"
     "}\n";
 
@@ -68,6 +73,17 @@ int main(void) {
     CHECK(m.cfgs[1].type == WB_MODE_CFG_FLOAT, "cfg 1 is float");
     CHECK(m.cfgs[2].type == WB_MODE_CFG_BOOL, "cfg 2 is bool");
     CHECK(m.cfgs[4].type == WB_MODE_CFG_STRING, "cfg 4 is string");
+
+    /* ---- declared spawn points ------------------------------------------- */
+    CHECK(m.nspawns == 3, "three declared spawns parsed");
+    CHECK(m.spawns[0].pos[0] == 0.0f && m.spawns[0].pos[1] == 0.0f &&
+          m.spawns[0].pos[2] == 0.0f, "spawn 0 position parsed");
+    CHECK(m.spawns[0].team == -1, "spawn 0 is any-team");
+    CHECK(!strcmp(m.spawns[0].tag, "arrival"), "spawn 0 tag parsed");
+    CHECK(m.spawns[1].team == 0 && m.spawns[1].pos[0] == 40.0f,
+          "spawn 1 is the red base");
+    CHECK(m.spawns[2].team == 1 && m.spawns[2].pos[0] == -40.0f,
+          "spawn 2 is the blue base");
 
     /* ---- entry path resolution ------------------------------------------ */
     char path[600];

@@ -30,6 +30,8 @@ extern "C" {
 #define WB_MODE_CFG_NAME    64
 #define WB_MODE_CFG_VALUE   128
 #define WB_MODE_MAX_CFG     32
+#define WB_MODE_SPAWN_TAG   64
+#define WB_MODE_MAX_SPAWNS  64
 
 typedef enum {
     WB_MODE_CFG_INT = 0,
@@ -46,6 +48,16 @@ typedef struct {
     int required;              /* 1 = must be supplied by the caller */
 } wb_mode_cfg_desc;
 
+/* A spawn point the gametype declares up front. Declared spawns exist before
+ * any script runs, which is what makes one mode able to travel INTO another:
+ * the destination's landing points must already be there. (A mode may also add
+ * spawns at runtime with wb.add_spawn.) */
+typedef struct {
+    float pos[3];
+    int   team;                          /* -1 = any team */
+    char  tag[WB_MODE_SPAWN_TAG];        /* landing-zone name, may be empty */
+} wb_mode_spawn;
+
 typedef struct {
     char name[WB_MODE_NAME_LEN];
     char version[WB_MODE_VERSION_LEN];
@@ -56,6 +68,8 @@ typedef struct {
     int  teams;
     wb_mode_cfg_desc cfgs[WB_MODE_MAX_CFG];
     int  ncfgs;
+    wb_mode_spawn spawns[WB_MODE_MAX_SPAWNS];
+    int  nspawns;
     char error[512];
 } wb_mode_manifest;
 

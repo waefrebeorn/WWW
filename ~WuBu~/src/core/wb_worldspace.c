@@ -93,6 +93,11 @@ const wb_mode_manifest *wb_worldspace_mode(const wb_worldspace *ws, const char *
     return find_mode(ws, name);
 }
 
+const wb_mode_manifest *wb_worldspace_mode_at(const wb_worldspace *ws, int index) {
+    if (!ws || index < 0 || index >= ws->nmodes) return NULL;
+    return &ws->modes[index];
+}
+
 int wb_worldspace_mode_dir(const wb_worldspace *ws, const char *name,
                            char *out, size_t out_sz) {
     if (!ws || !name || !out || out_sz == 0) return -1;

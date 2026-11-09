@@ -17,6 +17,26 @@ struct lua_State;
  * (position/velocity/mass/label), matching what the wb.* bindings use. */
 void wb_world_setup_comps(wb_world *w);
 
+/* The standard component ids, in the order wb_world_setup_comps registers
+ * them. Hosts that create entities directly use these. */
+enum {
+    WB_COMP_POSITION = 0,
+    WB_COMP_VELOCITY = 1,
+    WB_COMP_MASS     = 2,
+    WB_COMP_LABEL    = 3,
+    WB_COMP_COUNT    = 4
+};
+
+/* Create an entity carrying the standard components at `pos`, labelled
+ * `label`. This is how a host materializes a player in a mode's world: the
+ * space picks WHERE (wb_worldspace_spawn), this puts a body THERE. */
+wb_entity wb_world_spawn_entity(wb_world *w, const char *label,
+                                const float pos[3]);
+
+/* Push an entity handle as the Lua table shape wb.spawn returns ({i=, g=}),
+ * so a host can hand a script an entity it created itself. */
+void wb_script_push_entity(struct lua_State *L, wb_entity e);
+
 /* Build a fresh Lua state bound to the world via the registry, with the
  * wb.* bindings (spawn/set_pos/set_vel/get_pos/set_mass/count) installed.
  * When `ws` (a wb_worldspace) and `self_mode` (the name of the gametype this

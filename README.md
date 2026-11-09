@@ -29,9 +29,9 @@ WWW/
 ```bash
 cd '~WuBu~'
 mingw32-make all      # -> build/wubu_engine.exe
-mingw32-make test     # 22 gates, 769 assertions
-mingw32-make run      # runs games/main.lua
-./build/wubu_engine.exe games/yourgame.lua
+mingw32-make test     # 23 gates, 797 assertions
+mingw32-make run      # runs the omniverse-hub gametype
+./build/wubu_engine.exe games omniverse-hub
 ```
 
 The `src/lv` tree is the **Wua** submodule
@@ -73,7 +73,13 @@ work. See `docs/WWW.md` for the doctrine of the space.
 
 A gametype's own entry script declares its stadiums and travels players
 between worlds, so "spawn into a game space" is part of the gametype contract
-rather than a host-side call:
+rather than a host-side call. Point the engine at a directory of gametypes and
+name one — every subdirectory holding a `mode.json` is registered, so a mode's
+gates can name any sibling:
+
+```bash
+./build/wubu_engine.exe games omniverse-hub [player-id]
+```
 
 ```lua
 -- the hub's main.lua
@@ -82,7 +88,7 @@ local gate = wb.add_gate('duel-stadium', 'landing', 10, 0, 0, 2)
 function step(dt)
   local g = wb.gate_at(10, 0.5, 0)          -- the walk-in
   if g then
-    local ok, inst, x, y, z = wb.travel(g, 'P1', -1)
+    local ok, inst, x, y, z = wb.travel(g, wb.player_id, -1)
   end
   local worlds = wb.instances()             -- the live directory
 end
@@ -92,6 +98,10 @@ end
 world; `wb.travel(gate, player, team, cfg)` carries the player into the
 destination gametype's instance at its landing tag with the same identity
 (the empty source world is reaped). A mode only ever sees its own world.
+
+A mode's spawn points are **declared in `mode.json`**, not created by its
+script, so they exist before any script runs — that is what lets one mode
+travel into another. `wb.add_spawn` is for adding points at runtime.
 
 ## Module rules (enforced)
 

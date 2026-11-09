@@ -1,0 +1,12 @@
+{
+  "name": "duel-stadium",
+  "version": "1.0.0",
+  "author": "waefrebeorn",
+  "entry": "main.lua",
+  "description": "a stadium game space you step into",
+  "max_players": 64,
+  "teams": 2,
+  "spawns": [
+    { "pos": [0, 0, 0], "team": -1, "tag": "landing" }
+  ]
+}

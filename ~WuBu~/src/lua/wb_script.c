@@ -24,10 +24,10 @@ static const struct { const char *name; size_t size; } kComps[] = {
     {"mass",     sizeof(float)},
     {"label",    sizeof(char[32])},
 };
-#define POS 0
-#define VEL 1
-#define MASS 2
-#define LABEL 3
+#define POS WB_COMP_POSITION
+#define VEL WB_COMP_VELOCITY
+#define MASS WB_COMP_MASS
+#define LABEL WB_COMP_LABEL
 #define kCompCount (sizeof(kComps)/sizeof(kComps[0]))
 
 #define WB_META_WORLD "wb_world_ptr"
@@ -46,6 +46,27 @@ typedef struct {
 void wb_world_setup_comps(wb_world *w) {
     for (uint32_t i = 0; i < kCompCount; i++)
         wb_register_comp(w, kComps[i].name, kComps[i].size);
+}
+
+void wb_script_push_entity(lua_State *L, wb_entity e) {
+    lua_createtable(L, 0, 2);
+    lua_pushinteger(L, e.index); lua_setfield(L, -2, "i");
+    lua_pushinteger(L, e.gen);   lua_setfield(L, -2, "g");
+}
+
+wb_entity wb_world_spawn_entity(wb_world *w, const char *label,
+                                const float pos[3]) {
+    if (!w) return (wb_entity){0, 0};
+    wb_entity e = wb_entity_new(w);
+    float *p = (float *)wb_comp_add(w, e, POS);
+    float *v = (float *)wb_comp_add(w, e, VEL);
+    float *m = (float *)wb_comp_add(w, e, MASS);
+    char *lbl = (char *)wb_comp_add(w, e, LABEL);
+    if (p) { p[0] = pos[0]; p[1] = pos[1]; p[2] = pos[2]; }
+    if (v) { v[0] = v[1] = v[2] = 0.0f; }
+    if (m) *m = 1.0f;
+    if (lbl) snprintf(lbl, 32, "%s", label ? label : "anon");
+    return e;
 }
 
 static void push_v3(lua_State *L, const float *v) {
@@ -70,16 +91,8 @@ static void err(const char *msg) { fprintf(stderr, "wb: %s\n", msg); }
 static int l_spawn(lua_State *L) {
     wb_world *w = get_world(L);
     const char *label = lua_tostring(L, 1);
-    wb_entity e = wb_entity_new(w);
-    float *p = wb_comp_add(w, e, POS);
-    float *v = wb_comp_add(w, e, VEL);
-    float *m = wb_comp_add(w, e, MASS);
-    char *lbl = wb_comp_add(w, e, LABEL);
-    p[0]=p[1]=p[2]=0.0f; v[0]=v[1]=v[2]=0.0f; *m=1.0f;
-    snprintf(lbl, 32, "%s", label ? label : "anon");
-    lua_createtable(L, 0, 2);
-    lua_pushinteger(L, e.index); lua_setfield(L, -2, "i");
-    lua_pushinteger(L, e.gen);   lua_setfield(L, -2, "g");
+    wb_entity e = wb_world_spawn_entity(w, label, (const float[3]){0.0f, 0.0f, 0.0f});
+    wb_script_push_entity(L, e);
     return 1;
 }
 static wb_entity read_entity(lua_State *L, int idx) {

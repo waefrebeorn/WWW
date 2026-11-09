@@ -1,55 +1,53 @@
 /*
- * wb_lua_host.c -- Standalone engine entrypoint.
+ * wb_lua_host.c -- WuBu Engine standalone entrypoint.
  *
- * Loads ONE gamemode script, runs the main loop until the script sets
- * wb.running=false. Builds on wb_script (shared Lua<->core binding).
+ *   wubu_engine.exe <modes-root> <gametype> [player-id]
+ *
+ * Opens the world space, registers every gametype under <modes-root>, runs the
+ * named mode's entry script with its space bindings installed, spawns the
+ * player into that mode's world, and steps until the mode sets
+ * wb.running = false.
  *
  * Build: gcc -std=c11 -Ithirdparty/lua5.4 -Isrc/core -Isrc/lua \
- *        src/core/wb_ecs.c src/lua/wb_script.c src/lua/wb_lua_host.c \
+ *        src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c \
+ *        src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c \
+ *        src/lua/wb_script.c src/lua/wb_space_bind.c src/lua/wb_lua_host.c \
  *        every .c under thirdparty/lua5.4 -o wubu_engine -lm
  */
-#include "wb_ecs.h"
+#include "wb_host.h"
 #include "wb_script.h"
-#include <lua.h>
-#include <lauxlib.h>
+
 #include <stdio.h>
 
 static void err(const char *msg) { fprintf(stderr, "wb: %s\n", msg); }
 
 int main(int argc, char **argv) {
-    const char *script = argc > 1 ? argv[1] : "game/main.lua";
-
-    wb_world *world = wb_world_new();
-    if (!world) { err("out of memory"); return 1; }
-    wb_world_setup_comps(world);
-
-    lua_State *L = wb_script_create_state(world, NULL, NULL);
-
-    if (luaL_dofile(L, script) != LUA_OK) {
-        err(lua_tostring(L, -1));
-        lua_pop(L, 1);
-        wb_world_destroy(world);
-        lua_close(L);
-        return 1;
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s <modes-root> <gametype> [player-id]\n", argv[0]);
+        return 2;
     }
+    const char *root   = argv[1];
+    const char *mode   = argv[2];
+    const char *player = argc > 3 ? argv[3] : "player-1";
+
+    char why[1024];
+    wb_host *h = wb_host_open(root, mode, player, -1, why, sizeof why);
+    if (!h) { err(why); return 1; }
+
+    printf("wb: in '%s' as %s (instance %s)\n",
+           wb_host_mode(h), player, wb_host_instance(h));
 
     int guard = 0;
-    while (guard++ < 120000) {
-        lua_getglobal(L, "wb");
-        lua_getfield(L, -1, "running");
-        if (lua_isnil(L, -1)) break;
-        int running = lua_toboolean(L, -1);
-        lua_pop(L, 1);
-        if (!running) break;
-        lua_pop(L, 1);
-
-        if (wb_script_step(L, 1.0f / 60.0f) < 0) break;
-
-        wb_physics_tick(world, 1.0f / 60.0f);
+    while (guard++ < 120000 && wb_host_running(h)) {
+        if (wb_host_step(h, 1.0f / 60.0f) < 0) {
+            const char *e = wb_host_error(h);
+            err(e ? e : "mode step failed");
+            break;
+        }
+        wb_physics_tick(wb_host_world(h), 1.0f / 60.0f);
     }
 
-    wb_world_destroy(world);
-    lua_close(L);
+    wb_host_close(h);
     printf("wb: engine exited clean after %d ticks\n", guard - 1);
     return 0;
 }

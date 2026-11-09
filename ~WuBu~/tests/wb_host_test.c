@@ -1,0 +1,175 @@
+/*
+ * wb_host_test.c -- slice 22 gate: the gametype host.
+ *
+ * The first end-to-end test of the production path. A directory of gametype
+ * packages is scanned, every mode.json is registered along with its DECLARED
+ * spawn points, the named mode's entry script runs with its space bindings,
+ * the player is materialized in that mode's world, and the mode then walks the
+ * player into a stadium gate and travels them into another gametype's
+ * instance -- the same identity carried across, the empty source reaped.
+ *
+ * This is the flow `wubu_engine.exe <modes-root> <gametype>` runs.
+ */
+#include "wb_host.h"
+#include "wb_script.h"
+#include "wb_worldspace.h"
+#include "wb_util.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int g_pass = 0, g_fail = 0;
+#define CHECK(cond, msg) do { if (cond) g_pass++; else { g_fail++; printf("FAIL: %s (line %d)\n", msg, __LINE__); } } while (0)
+
+static void write_file(const char *path, const char *text) {
+    char buf[600];
+    snprintf(buf, sizeof buf, "%s", path);
+    for (char *p = buf + 1; *p; p++) {
+        if (*p == '/' || *p == '\\') { *p = 0; wb_ensure_dir(buf); *p = '/'; }
+    }
+    FILE *f = fopen(path, "wb");
+    if (!f) { printf("cannot write %s\n", path); exit(1); }
+    fwrite(text, 1, strlen(text), f);
+    fclose(f);
+}
+
+/* The hub: declares a rift into the stadium and walks the player into it. */
+static const char *kHubJson =
+    "{\n"
+    "  \"name\": \"omniverse-hub\",\n"
+    "  \"version\": \"1.0.0\",\n"
+    "  \"entry\": \"main.lua\",\n"
+    "  \"max_players\": 100,\n"
+    "  \"teams\": 1,\n"
+    "  \"spawns\": [ { \"pos\": [0, 0, 0], \"team\": -1, \"tag\": \"arrival\" } ]\n"
+    "}\n";
+
+static const char *kHubLua =
+    "wb.add_gate('duel-stadium', 'landing', 10, 0, 0, 2)\n"
+    "local RIFT = { 10, 0, 0 }\n"
+    "local ticks = 0\n"
+    "function step(dt)\n"
+    "  ticks = ticks + 1\n"
+    "  local p = wb.get_pos(wb.player)\n"
+    "  local dx, dz = RIFT[1] - p[1], RIFT[3] - p[3]\n"
+    "  local dist = math.sqrt(dx * dx + dz * dz)\n"
+    "  if dist > 0.25 then\n"
+    "    wb.set_vel(wb.player, { dx / dist * 4.0, 0, dz / dist * 4.0 })\n"
+    "    return\n"
+    "  end\n"
+    "  wb.set_vel(wb.player, { 0, 0, 0 })\n"
+    "  local g = wb.gate_at(p[1], p[2], p[3])\n"
+    "  if g then\n"
+    "    local ok = wb.travel(g, wb.player_id, -1)\n"
+    "    if ok then wb.running = false end\n"
+    "  end\n"
+    "end\n";
+
+/* The stadium: its landing tag is what the hub's rift points at. */
+static const char *kStadiumJson =
+    "{\n"
+    "  \"name\": \"duel-stadium\",\n"
+    "  \"version\": \"1.0.0\",\n"
+    "  \"entry\": \"main.lua\",\n"
+    "  \"max_players\": 64,\n"
+    "  \"teams\": 2,\n"
+    "  \"spawns\": [ { \"pos\": [50, 0, 50], \"team\": -1, \"tag\": \"landing\" } ]\n"
+    "}\n";
+
+static const char *kStadiumLua =
+    "function step(dt)\n"
+    "  wb.running = false\n"
+    "end\n";
+
+int main(void) {
+    write_file("build/host/omniverse-hub/mode.json", kHubJson);
+    write_file("build/host/omniverse-hub/main.lua", kHubLua);
+    write_file("build/host/duel-stadium/mode.json", kStadiumJson);
+    write_file("build/host/duel-stadium/main.lua", kStadiumLua);
+
+    char err[1024];
+
+    /* ---- the happy path -------------------------------------------------- */
+    wb_host *h = wb_host_open("build/host", "omniverse-hub", "P1", -1,
+                              err, sizeof err);
+    CHECK(h != NULL, "the host opens a directory of gametypes");
+    if (!h) {
+        printf("host error: %s\n", err);
+        printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
+        return 1;
+    }
+
+    CHECK(strcmp(wb_host_mode(h), "omniverse-hub") == 0,
+          "the player is in the requested gametype");
+    CHECK(wb_host_instance(h)[0] != 0, "the player is in a live instance");
+
+    /* both gametypes under the root were registered */
+    CHECK(wb_worldspace_mode_count(wb_host_space(h)) == 2,
+          "every mode.json under the root was registered");
+
+    /* the DECLARED spawn points were installed before any script ran */
+    CHECK(wb_worldspace_spawn_count(wb_host_space(h), "omniverse-hub") == 1,
+          "the hub's declared arrival spawn was installed");
+    CHECK(wb_worldspace_spawn_count(wb_host_space(h), "duel-stadium") == 1,
+          "the stadium's declared landing spawn was installed");
+
+    /* the player is a real body in the mode's world, at the arrival point */
+    CHECK(wb_entity_valid(wb_host_world(h), wb_host_player(h)),
+          "the player was materialized as an entity in the mode's world");
+    CHECK(wb_entity_count(wb_host_world(h)) == 1,
+          "the mode's world holds exactly the player");
+
+    /* the mode declared its own gate from the script */
+    CHECK(wb_worldspace_portal_count(wb_host_space(h)) == 1,
+          "the mode's script declared its stadium gate");
+
+    const char *hub_instance = wb_host_instance(h);
+
+    /* ---- run the mode until it hands off --------------------------------- */
+    int ticks = 0;
+    while (wb_host_running(h) && ticks < 5000) {
+        if (wb_host_step(h, 1.0f / 60.0f) < 0) {
+            CHECK(0, "the mode's step() ran without error");
+            break;
+        }
+        wb_physics_tick(wb_host_world(h), 1.0f / 60.0f);
+        ticks++;
+    }
+    CHECK(ticks > 1, "the mode stepped");
+    CHECK(!wb_host_running(h), "the mode set wb.running = false after the handoff");
+
+    /* ---- the travel actually happened ------------------------------------- */
+    wb_dist_registry *reg = wb_worldspace_registry(wb_host_space(h));
+    CHECK(wb_dist_registry_count(reg) == 1,
+          "the empty source world was reaped after the handoff");
+    CHECK(wb_dist_registry_find(reg, hub_instance) == NULL,
+          "the hub instance no longer holds the player");
+
+    wb_dist_info infos[8];
+    int got = wb_dist_registry_list(reg, infos, 8);
+    CHECK(got == 1 && !strcmp(infos[0].gamemode, "duel-stadium"),
+          "the remaining world is the stadium");
+    CHECK(infos[0].players == 1, "the stadium world holds exactly one player");
+
+    wb_dist_instance *dinst = wb_dist_registry_find(reg, infos[0].id);
+    CHECK(dinst != NULL && wb_dist_instance_has_player(dinst, "P1"),
+          "the SAME identity P1 is in the stadium instance");
+
+    wb_host_close(h);
+
+    /* ---- refusal paths ---------------------------------------------------- */
+    h = wb_host_open("build/host", "nope", "P1", -1, err, sizeof err);
+    CHECK(h == NULL, "an unknown gametype is refused");
+    CHECK(strstr(err, "not one of") != NULL, "the refusal names the registered set");
+
+    h = wb_host_open("build/does-not-exist", "omniverse-hub", "P1", -1,
+                     err, sizeof err);
+    CHECK(h == NULL, "a missing modes directory is refused");
+
+    h = wb_host_open("build/host", "", "P1", -1, err, sizeof err);
+    CHECK(h == NULL, "an empty gametype name is refused");
+
+    printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
+    return g_fail ? 1 : 0;
+}

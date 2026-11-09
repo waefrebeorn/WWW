@@ -15,9 +15,9 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 22 gates, 769 assertions
-mingw32-make run        # runs games/main.lua
-./build/wubu_engine.exe games/yourgame.lua
+mingw32-make test       # 23 gates, 797 assertions
+mingw32-make run        # runs the omniverse-hub gametype
+./build/wubu_engine.exe games omniverse-hub
 ```
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
@@ -39,10 +39,11 @@ skips its own `mkdir` rule.
 | `src/core/wb_avatar_*` | avatar: bones / glTF load / anim sampling / identity |
 | `src/core/wb_edit.*` | in-world editor (ops, undo/redo, JSON replay) |
 | `src/core/wb_dist.*` | experience distribution (instances, matchmaking, portals) |
-| `src/core/wb_mode.*` | gametype manifests + typed config schema (slice 19) |
+| `src/core/wb_mode.*` | gametype manifests + typed config schema + declared spawns (slice 19) |
 | `src/core/wb_spawn.*` | spawn points: team / gametype tagged, reservable |
 | `src/core/wb_worldspace.*` | the spawn-a-worldspace facade (slice 19) + stadium gates (slice 20) |
-| `src/lua/wb_space_bind.*` | the gamemode-facing space: `wb.add_gate` / `gate_at` / `travel` / `instances` (slice 21) |
+| `src/core/wb_host.*` | the gametype host: scan a directory of modes, run one (slice 22) |
+| `src/lua/wb_space_bind.*` | the gamemode-facing space: `wb.add_spawn` / `add_gate` / `gate_at` / `travel` / `instances` (slices 21–22) |
 | `src/core/wb_util.*` | shared helpers: file IO, FNV-1a hash, error buffer, paths |
 | `src/core/wb_gltf.*` | shared glTF accessor decoding + GLB splitting |
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
@@ -54,25 +55,55 @@ skips its own `mkdir` rule.
 
 ## Status
 
-All 21 roadmap slices are done — ECS, spatial, tiles, render, experience
+All 22 roadmap slices are done — ECS, spatial, tiles, render, experience
 containers, slerm-Lua, physics, input/camera/character, GPU, content pipeline,
 networking, avatar/identity, modding sandbox, distribution, editor, server
-meshing, gametypes, stadium travel, and the gamemode-facing space.
-`docs/meta-engine-assessment.md` is the strategic read: the five platform
-pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the space:
-what it is for, and what it refuses to be.
+meshing, gametypes, stadium travel, the gamemode-facing space, and the
+gametype host. `docs/meta-engine-assessment.md` is the strategic read: the five
+platform pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the
+space: what it is for, and what it refuses to be.
 
 A gametype is a declared, parameterisable package (`mode.json` + an entry
 script + a typed config schema). The engine knows modes, configs, spawns and
 instances — it does not know games. That ignorance is what lets all gametypes
 work.
 
-A gametype's own script declares its stadiums and travels players between
-worlds: `wb.add_gate(dst, tag, x, y, z, radius)` declares a gate in the mode's
-own world, `wb.gate_at(x, y, z)` is the walk-in test, `wb.travel(gate, player,
-team, cfg)` carries a player into the destination gametype's instance at its
-landing tag with the same identity, and `wb.instances()` reads the live
-directory. The mode only ever sees its own world — the engine stays ignorant.
+Point the engine at a directory of gametypes and name one:
+
+```bash
+./build/wubu_engine.exe games omniverse-hub [player-id]
+```
+
+Every subdirectory holding a `mode.json` is registered (so a mode's gates can
+name any sibling), the named mode's entry script runs with its space bindings,
+the player is materialized in that mode's world at a spawn point the mode
+declared, and the world steps until the mode sets `wb.running = false`. The
+`games/` tree ships two modes — `omniverse-hub`, a hub with a rift into
+`duel-stadium`, and the stadium itself.
+
+A mode's own script declares its stadiums and travels players between worlds:
+
+```lua
+wb.add_spawn(0, 0, 0, -1, "arrival")                      -- runtime spawn
+local gate = wb.add_gate("duel-stadium", "landing", 10, 0, 0, 2)
+
+function step(dt)
+  local g = wb.gate_at(10, 0.5, 0)                        -- the walk-in
+  if g then
+    local ok, inst, x, y, z = wb.travel(g, wb.player_id, -1)
+  end
+  local worlds = wb.instances()                           -- the live directory
+end
+```
+
+`wb.add_gate(dst, tag, x, y, z, radius)` declares a gate in the mode's own
+world; `wb.travel(gate, player, team, cfg)` carries the player into the
+destination gametype's instance at its landing tag with the same identity (the
+empty source world is reaped). A mode only ever sees its own world.
+
+Spawn points are **declared in `mode.json`**, not created by the script, so
+they exist before any script runs — that is what lets one mode travel into
+another. `wb.add_spawn` is for a mode that needs to add points at runtime.
 
 ## Module rules
 

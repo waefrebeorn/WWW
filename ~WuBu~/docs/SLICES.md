@@ -1,4 +1,4 @@
-# Slices 9–21 — kernel → meta engine → the gamemode-facing space
+# Slices 9–22 — kernel → meta engine → the gametype host
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 Each slice ships real, tested code; nothing is marked done without a green gate.
@@ -18,15 +18,16 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 19 | gametypes | mode manifests + typed config schema, spawn points, the spawn-a-worldspace facade | `make test-mode` — 42 · `make test-spawn` — 37 · `make test-worldspace` — 53 | ✅ |
 | 20 | stadium travel | Yu-Gi-Oh portals: walk into a gate, leave every world, spawn into another gametype's instance at a tagged landing, same identity, empty source reaped | `make test-portal` — 22 | ✅ |
 | 21 | gamemode-facing space | the stadium layer exposed to scripts: `wb.add_gate` / `gate_at` / `travel` / `instances` from inside the sandbox, attributed to the mode's own world | `make test-space` — 25 | ✅ |
+| 22 | gametype host | the engine binary runs a gametype package: scan a directory of modes, register each with its declared spawns, run the mode's script, materialize the player, step the world | `make test-host` — 20 | ✅ |
 
 ## Running totals
 
-`make test` currently: **22 gates, 769 assertions, 0 fail.**
+`make test` currently: **23 gates, 797 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 6 · EXP 15 · LV 35 · LV-SCRIPT 14 ·
 PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSETS 30 · NET 28 · AVATAR 32 · MOD 21 ·
-DIST 41 · EDIT 37 · MESH 37 · MODE 42 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
-SPACE 25.
+DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
+SPACE 27 · HOST 20.
 
 ## Design rules carried forward
 
@@ -38,3 +39,7 @@ SPACE 25.
 - The Lua bridge (`wb_script`) carries an opaque space context but never
   references the worldspace stack; the bindings live in `wb_space_bind`, so a
   gate that only needs the generic bridge does not link the world.
+- **A mode's spawn points are declared data, not script side effects.** They
+  live in `mode.json` so they exist before any script runs — which is what makes
+  one mode able to travel INTO another. (`wb.add_spawn` exists for a mode that
+  needs to add points at runtime; it cannot be the only source.)

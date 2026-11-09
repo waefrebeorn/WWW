@@ -52,6 +52,29 @@ int wb_mode_manifest_load(const char *path, wb_mode_manifest *out) {
     out->max_players = wb_json_int(wb_json_get(root, "max_players"), 32);
     out->teams      = wb_json_int(wb_json_get(root, "teams"), 1);
 
+    /* Declared spawn points. These exist before any script runs, which is what
+     * lets one mode travel INTO another: the destination's landing points must
+     * already be there. */
+    wb_json *spawns = wb_json_get(root, "spawns");
+    if (spawns && spawns->type == WB_JSON_ARR) {
+        for (int i = 0; i < spawns->n && out->nspawns < WB_MODE_MAX_SPAWNS; i++) {
+            wb_json *s = spawns->items[i];
+            wb_mode_spawn *d = &out->spawns[out->nspawns];
+            memset(d, 0, sizeof *d);
+
+            wb_json *p = wb_json_get(s, "pos");
+            if (p && p->type == WB_JSON_ARR && p->n >= 3) {
+                d->pos[0] = (float)wb_json_num(p->items[0], 0.0);
+                d->pos[1] = (float)wb_json_num(p->items[1], 0.0);
+                d->pos[2] = (float)wb_json_num(p->items[2], 0.0);
+            }
+            d->team = wb_json_int(wb_json_get(s, "team"), -1);
+            const char *tag = wb_json_str(wb_json_get(s, "tag"));
+            if (tag) snprintf(d->tag, sizeof d->tag, "%s", tag);
+            out->nspawns++;
+        }
+    }
+
     wb_json *cfgs = wb_json_get(root, "config");
     if (cfgs && cfgs->type == WB_JSON_ARR) {
         for (int i = 0; i < cfgs->n && out->ncfgs < WB_MODE_MAX_CFG; i++) {

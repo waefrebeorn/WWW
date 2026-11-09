@@ -58,6 +58,8 @@ static void write_file(const char *path, const char *text) {
  * that walks into it. This is the whole gametype contract -- no C changes. */
 static const char *kHubLua =
     "-- the hub's own script: a stadium gate, declared from Lua\n"
+    "spawn = wb.add_spawn(1, 2, 3, 0, 'scripted')\n"
+    "nspawns = wb.spawn_count()\n"
     "gate = wb.add_gate('duel-stadium', 'landing', 10, 0, 0, 2)\n"
     "\n"
     "function step(dt)\n"
@@ -74,6 +76,7 @@ static const char *kHubLua =
     "  -- the directory, read from inside the sandbox\n"
     "  local worlds = wb.instances()\n"
     "  n_worlds = #worlds\n"
+    "  nspawns = wb.spawn_count()\n"
     "  if n_worlds > 0 then\n"
     "    world0 = worlds[1].gamemode\n"
     "    world0_players = worlds[1].players\n"
@@ -132,6 +135,13 @@ int main(void) {
               "the gamemode declared its stadium gate from Lua (gate 0)");
         CHECK(wb_worldspace_portal_count(ws) == 1,
               "the gate is in the space, not just in the script");
+
+        /* ...and add_spawn, on top of the one the host declared in C */
+        double spawn = -1, nspawns = -1;
+        CHECK(wb_mod_get_global_number(hub, "spawn", &spawn) == 0 && spawn == 1,
+              "the gamemode added a spawn point from Lua (index 1)");
+        CHECK(wb_mod_get_global_number(hub, "nspawns", &nspawns) == 0 && nspawns == 2,
+              "the script sees both its own spawn and the host's");
 
         /* step: the walk-in is detected, the travel happens */
         CHECK(wb_mod_step(hub, 1.0f / 60.0f) == 1, "the hub's step() ran");

@@ -1,0 +1,12 @@
+{
+  "name": "omniverse-hub",
+  "version": "1.0.0",
+  "author": "waefrebeorn",
+  "entry": "main.lua",
+  "description": "the 1:1 mirror of the universe -- a hub with rifts into game spaces",
+  "max_players": 100,
+  "teams": 1,
+  "spawns": [
+    { "pos": [0, 0, 0], "team": -1, "tag": "arrival" }
+  ]
+}

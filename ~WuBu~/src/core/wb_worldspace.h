@@ -37,6 +37,11 @@ int wb_worldspace_register_mode(wb_worldspace *ws, const char *dir,
 int wb_worldspace_mode_count(const wb_worldspace *ws);
 const wb_mode_manifest *wb_worldspace_mode(const wb_worldspace *ws, const char *name);
 
+/* The i-th registered gametype (0 <= index < wb_worldspace_mode_count), or
+ * NULL. Lets a host walk the registered set -- e.g. to install each mode's
+ * declared spawn points. */
+const wb_mode_manifest *wb_worldspace_mode_at(const wb_worldspace *ws, int index);
+
 /* The directory a mode was registered from (for resolving its assets). */
 int wb_worldspace_mode_dir(const wb_worldspace *ws, const char *name,
                            char *out, size_t out_sz);

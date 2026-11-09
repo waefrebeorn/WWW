@@ -18,8 +18,8 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c
-SCRIPT_SRC := src/lua/wb_script.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c
+SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
 TARGET  := build/wubu_engine.exe
@@ -31,14 +31,18 @@ all: $(TARGET)
 build:
 	mkdir -p build
 
-$(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS)
-	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS) -o $@ -lm
+$(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS) $(WORLDSPACE_SRC)
+	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ -lm
 
 run: $(TARGET)
-	./$(TARGET) games/main.lua
+	./$(TARGET) games omniverse-hub
+
+# run-mode: run any gametype package under games/ -- `make run-mode M=duel-stadium`
+run-mode: $(TARGET)
+	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -195,6 +199,16 @@ test-space: build $(LUA_OBJS)
 	  src/lua/wb_space_bind.c tests/wb_space_test.c \
 	  $(LUA_OBJS) -o $(TEST_SPACE) -lm
 	./$(TEST_SPACE)
+
+# test-host: slice 22 -- the gametype host: scan a directory of gametypes,
+# register them, run the named mode's script, spawn the player, run the world.
+TEST_HOST := build/wb_host_test.exe
+test-host: build $(LUA_OBJS)
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c \
+	  $(WORLDSPACE_SRC) src/core/wb_host.c src/lua/wb_script.c \
+	  src/lua/wb_space_bind.c tests/wb_host_test.c \
+	  $(LUA_OBJS) -o $(TEST_HOST) -lm
+	./$(TEST_HOST)
 
 clean:
 	rm -rf build

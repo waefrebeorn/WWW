@@ -17,7 +17,44 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ------------------------------------------------- space bindings (slice 21) */
+/* ------------------------------------------------- space bindings (slice 21)
+ * The Yu-Gi-Oh stadium mechanic, exposed to a gamemode's own script. A mode
+ * declares its spawns and its stadium gates in main.lua; travel is triggered
+ * from step() when a player stands inside one. The engine stays ignorant of
+ * any particular game: a spawn is just a place, a gate is just a volume in one
+ * world pointing at another gametype. */
+
+/* wb.add_spawn(x, y, z, team, tag) -> spawn_index
+ * Declare a spawn point in the script's own gametype. team -1 = any team;
+ * tag names a landing zone (a portal's destination). */
+static int l_add_spawn(lua_State *L) {
+    wb_worldspace *ws = NULL;
+    char self_mode[WB_MODE_NAME_LEN];
+    if (wb_script_space_ctx(L, &ws, self_mode, sizeof self_mode) != 0 || !ws) {
+        lua_pushinteger(L, -1);
+        return 1;
+    }
+    float pos[3];
+    pos[0] = (float)luaL_checknumber(L, 1);
+    pos[1] = (float)luaL_checknumber(L, 2);
+    pos[2] = (float)luaL_checknumber(L, 3);
+    int team = (int)luaL_optinteger(L, 4, -1);
+    const char *tag = luaL_optstring(L, 5, "");
+    lua_pushinteger(L, wb_worldspace_add_spawn(ws, self_mode, pos, team, tag));
+    return 1;
+}
+
+/* wb.spawn_count() -> number of spawn points declared in this gametype */
+static int l_spawn_count(lua_State *L) {
+    wb_worldspace *ws = NULL;
+    char self_mode[WB_MODE_NAME_LEN];
+    if (wb_script_space_ctx(L, &ws, self_mode, sizeof self_mode) != 0 || !ws) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
+    lua_pushinteger(L, wb_worldspace_spawn_count(ws, self_mode));
+    return 1;
+}
 
 /* wb.add_gate(dst_gamemode, dst_tag, x, y, z, radius) -> gate_index
  * Declare a stadium gate in the script's own gametype. Returns the index, or
@@ -156,6 +193,8 @@ static int l_instances(lua_State *L) {
 }
 
 static const luaL_Reg kSpaceBindings[] = {
+    {"add_spawn",   l_add_spawn},
+    {"spawn_count", l_spawn_count},
     {"add_gate",    l_add_gate},
     {"gate_count",  l_gate_count},
     {"gate_at",     l_gate_at},

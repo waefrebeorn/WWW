@@ -53,18 +53,23 @@ analogue, minus the platform:
 
 ```
 gametype/
-├── mode.json      # name, version, entry script, config schema, team count
+├── mode.json      # name, version, entry script, config schema, teams, spawns
 ├── main.lua       # the mode's step() — owns gameplay
 └── assets/        # optional, referenced by path
 ```
 
-- **Declared**: `mode.json` says what the mode is and what it needs.
+- **Declared**: `mode.json` says what the mode is and what it needs. Its
+  `spawns` array is where players arrive — declared data, present before any
+  script runs, so one mode can travel into another.
 - **Parameterisable**: `config` is a typed schema (int/float/bool/string with
   ranges and defaults). "Zone Wars 10v10" and "Zone Wars Solos" are the *same*
   gametype with different config — not two gametypes, not two scripts.
 - **Spawned**: the space finds an instance for the mode, picks a spawn point,
   and puts the player in it. That is the whole flow: *pick a mode, get a
   world*.
+- **Self-locating**: the mode's own script declares its stadium gates
+  (`wb.add_gate`) and can add spawn points at runtime (`wb.add_spawn`), in its
+  own world only.
 
 The engine does not know what a "zone war" is. It knows: a mode has an entry
 script, a config schema, a team count, and a set of spawn points. Everything
