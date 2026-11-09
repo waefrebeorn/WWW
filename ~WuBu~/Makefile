@@ -2,6 +2,13 @@
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
 LUA_SRC := $(filter-out %/lua.c %/onelua.c %/ltests.c,$(wildcard thirdparty/lua5.4/*.c))
+# Lua 5.4 is compiled once into objects and linked; recompiling 34 files for
+# every gate that needs it was the bulk of the suite's build time.
+LUA_OBJS := $(patsubst thirdparty/lua5.4/%.c,build/lua54_%.o,$(LUA_SRC))
+LUA_INC := -Ithirdparty/lua5.4
+
+build/lua54_%.o: thirdparty/lua5.4/%.c
+	$(CC) $(CFLAGS) $(LUA_INC) -c $< -o $@
 # shared kernel: file/hash/error helpers and the glTF accessor layer
 UTIL_SRC  := src/core/wb_util.c
 GLTF_SRC  := src/core/wb_gltf.c
@@ -24,8 +31,8 @@ all: $(TARGET)
 build:
 	mkdir -p build
 
-$(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_SRC)
-	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_SRC) -o $@ -lm
+$(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS)
+	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS) -o $@ -lm
 
 run: $(TARGET)
 	./$(TARGET) games/main.lua
@@ -54,8 +61,8 @@ test-render: build
 	./$(TEST_RENDER)
 
 TEST_EXP := build/wb_exp_test.exe
-test-exp: build
-	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_SRC) -o $(TEST_EXP) -lm
+test-exp: build $(LUA_OBJS)
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_OBJS) -o $(TEST_EXP) -lm
 	./$(TEST_EXP)
 
 # test-lv: slerm-Lua -- the Wua submodule (~WuBu~/src/lv, github.com/waefrebeorn/Wua)
@@ -130,8 +137,8 @@ test-avatar: build
 
 # test-mod: slice 15 -- untrusted mod sandbox (manifest, isolation, budget, reload)
 TEST_MOD := build/wb_mod_test.exe
-test-mod: build
-	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_json.c $(UTIL_SRC) src/lua/wb_script.c src/lua/wb_mod.c tests/wb_mod_test.c $(LUA_SRC) -o $(TEST_MOD) -lm
+test-mod: build $(LUA_OBJS)
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_json.c $(UTIL_SRC) src/lua/wb_script.c src/lua/wb_mod.c tests/wb_mod_test.c $(LUA_OBJS) -o $(TEST_MOD) -lm
 	./$(TEST_MOD)
 
 # test-dist: slice 16 -- instances, discovery, matchmaking, portals
