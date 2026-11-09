@@ -15,11 +15,15 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 16 | experience distribution | portals/stadiums, instance matchmaking, discovery hooks | `make test-dist` — 41 | ✅ |
 | 17 | editor | in-engine world editing + live edit | `make test-edit` — 37 | ✅ |
 | 18 | server meshing | authority handover, per-component authority, persistent entity streaming | `make test-mesh` — 37 | ✅ |
+| 19 | gametypes | mode manifests + typed config schema, spawn points, the spawn-a-worldspace facade | `make test-mode` — 42 · `make test-spawn` — 37 · `make test-worldspace` — 53 | ✅ |
 
 ## Running totals
 
-`make test` currently: ECS 21 · SPATIAL 142 · TILES 49 · RENDER 6 · EXP 15 ·
-LV 17 · LV-SCRIPT 5 · PHYSICS 27 = **282 assertions, 0 fail**.
+`make test` currently: **20 gates, 705 assertions, 0 fail.**
+
+ECS 21 · SPATIAL 142 · TILES 49 · RENDER 6 · EXP 15 · LV 17 · LV-SCRIPT 5 ·
+PHYSICS 27 · CHARACTER 14 · GPU 26 · ASSETS 30 · NET 28 · AVATAR 32 · MOD 21 ·
+DIST 41 · EDIT 37 · MESH 37 · MODE 42 · SPAWN 37 · WORLDSPACE 53.
 
 ## Design rules carried forward
 

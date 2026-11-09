@@ -175,7 +175,12 @@ wb_json *wb_json_get(const wb_json *obj, const char *key) {
 }
 
 int wb_json_int(const wb_json *v, int dflt) {
-    return (v && v->type == WB_JSON_NUM) ? (int)v->num : dflt;
+    if (!v) return dflt;
+    if (v->type == WB_JSON_NUM) return (int)v->num;
+    /* JSON booleans coerce to 1/0. Without this, "required": true reads as
+     * the default and every such flag in every manifest is silently off. */
+    if (v->type == WB_JSON_BOOL) return v->boolean ? 1 : 0;
+    return dflt;
 }
 
 double wb_json_num(const wb_json *v, double dflt) {

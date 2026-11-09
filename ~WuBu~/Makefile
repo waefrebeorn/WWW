@@ -31,7 +31,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -121,6 +121,11 @@ test-assets: build
 # test-net: slice 13 -- server-authoritative netcode, prediction, AOI, delta
 NET_SRC := src/net/wb_net_aoi.c src/net/wb_net_server.c \
            src/net/wb_net_client.c src/net/wb_net_loopback.c
+MODE_SRC := src/core/wb_mode.c $(UTIL_SRC) src/core/wb_json.c
+SPAWN_SRC := src/core/wb_spawn.c
+WORLDSPACE_SRC := src/core/wb_worldspace.c src/core/wb_mode.c \
+                  src/core/wb_spawn.c src/core/wb_dist.c \
+                  $(UTIL_SRC) src/core/wb_json.c
 TEST_NET := build/wb_net_test.exe
 test-net: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/net src/core/wb_spatial.c $(NET_SRC) tests/wb_net_test.c -o $(TEST_NET) -lm
@@ -155,6 +160,24 @@ TEST_MESH := build/wb_mesh_test.exe
 test-mesh: build
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/net src/net/wb_mesh.c tests/wb_mesh_test.c -o $(TEST_MESH) -lm
 	./$(TEST_MESH)
+
+# test-mode: slice 19 -- gametype manifests + config schema
+TEST_MODE := build/wb_mode_test.exe
+test-mode: build
+	$(CC) $(CFLAGS) -Isrc/core $(MODE_SRC) tests/wb_mode_test.c -o $(TEST_MODE) -lm
+	./$(TEST_MODE)
+
+# test-spawn: slice 19 -- spawn points
+TEST_SPAWN := build/wb_spawn_test.exe
+test-spawn: build
+	$(CC) $(CFLAGS) -Isrc/core $(SPAWN_SRC) tests/wb_spawn_test.c -o $(TEST_SPAWN) -lm
+	./$(TEST_SPAWN)
+
+# test-worldspace: slice 19 -- the spawn-a-worldspace facade
+TEST_WS := build/wb_worldspace_test.exe
+test-worldspace: build
+	$(CC) $(CFLAGS) -Isrc/core $(WORLDSPACE_SRC) tests/wb_worldspace_test.c -o $(TEST_WS) -lm
+	./$(TEST_WS)
 
 clean:
 	rm -rf build

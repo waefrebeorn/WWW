@@ -39,6 +39,9 @@ skips its own `mkdir` rule.
 | `src/core/wb_avatar_*` | avatar: bones / glTF load / anim sampling / identity |
 | `src/core/wb_edit.*` | in-world editor (ops, undo/redo, JSON replay) |
 | `src/core/wb_dist.*` | experience distribution (instances, matchmaking, portals) |
+| `src/core/wb_mode.*` | gametype manifests + typed config schema (slice 19) |
+| `src/core/wb_spawn.*` | spawn points: team / gametype tagged, reservable |
+| `src/core/wb_worldspace.*` | the spawn-a-worldspace facade (slice 19) |
 | `src/core/wb_util.*` | shared helpers: file IO, FNV-1a hash, error buffer, paths |
 | `src/core/wb_gltf.*` | shared glTF accessor decoding + GLB splitting |
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
@@ -50,11 +53,17 @@ skips its own `mkdir` rule.
 
 ## Status
 
-All 18 roadmap slices are done — ECS, spatial, tiles, render, experience
+All 19 roadmap slices are done — ECS, spatial, tiles, render, experience
 containers, slerm-Lua, physics, input/camera/character, GPU, content pipeline,
 networking, avatar/identity, modding sandbox, distribution, editor, server
-meshing. `docs/meta-engine-assessment.md` is the strategic read: the five
-platform pillars and the slice roadmap.
+meshing, and gametypes. `docs/meta-engine-assessment.md` is the strategic read:
+the five platform pillars and the slice roadmap. `../docs/WWW.md` is the
+doctrine of the space: what it is for, and what it refuses to be.
+
+A gametype is a declared, parameterisable package (`mode.json` + an entry
+script + a typed config schema). The engine knows modes, configs, spawns and
+instances — it does not know games. That ignorance is what lets all gametypes
+work.
 
 ## Module rules
 
