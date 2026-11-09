@@ -29,7 +29,7 @@ WWW/
 ```bash
 cd '~WuBu~'
 mingw32-make all      # -> build/wubu_engine.exe
-mingw32-make test     # 20 gates, 705 assertions
+mingw32-make test     # 22 gates, 769 assertions
 mingw32-make run      # runs games/main.lua
 ./build/wubu_engine.exe games/yourgame.lua
 ```
@@ -70,6 +70,28 @@ gametype/
 instance and a world position. The engine knows modes, configs, spawns and
 instances — it does not know games. That ignorance is what lets all gametypes
 work. See `docs/WWW.md` for the doctrine of the space.
+
+A gametype's own entry script declares its stadiums and travels players
+between worlds, so "spawn into a game space" is part of the gametype contract
+rather than a host-side call:
+
+```lua
+-- the hub's main.lua
+local gate = wb.add_gate('duel-stadium', 'landing', 10, 0, 0, 2)
+
+function step(dt)
+  local g = wb.gate_at(10, 0.5, 0)          -- the walk-in
+  if g then
+    local ok, inst, x, y, z = wb.travel(g, 'P1', -1)
+  end
+  local worlds = wb.instances()             -- the live directory
+end
+```
+
+`wb.add_gate(dst, tag, x, y, z, radius)` declares a gate in the mode's own
+world; `wb.travel(gate, player, team, cfg)` carries the player into the
+destination gametype's instance at its landing tag with the same identity
+(the empty source world is reaped). A mode only ever sees its own world.
 
 ## Module rules (enforced)
 

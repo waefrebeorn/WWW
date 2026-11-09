@@ -40,7 +40,7 @@ wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
     if (!e->world) { free(e); return NULL; }
     wb_world_setup_comps(e->world);
 
-    e->L = wb_script_create_state(e->world);
+    e->L = wb_script_create_state(e->world, NULL, NULL);
     if (!e->L) { wb_world_destroy(e->world); free(e); return NULL; }
 
     if (luaL_dofile(e->L, cfg->lua_path) == LUA_OK) {

@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 17 gates, 573 assertions
+mingw32-make test       # 22 gates, 769 assertions
 mingw32-make run        # runs games/main.lua
 ./build/wubu_engine.exe games/yourgame.lua
 ```
@@ -41,7 +41,8 @@ skips its own `mkdir` rule.
 | `src/core/wb_dist.*` | experience distribution (instances, matchmaking, portals) |
 | `src/core/wb_mode.*` | gametype manifests + typed config schema (slice 19) |
 | `src/core/wb_spawn.*` | spawn points: team / gametype tagged, reservable |
-| `src/core/wb_worldspace.*` | the spawn-a-worldspace facade (slice 19) |
+| `src/core/wb_worldspace.*` | the spawn-a-worldspace facade (slice 19) + stadium gates (slice 20) |
+| `src/lua/wb_space_bind.*` | the gamemode-facing space: `wb.add_gate` / `gate_at` / `travel` / `instances` (slice 21) |
 | `src/core/wb_util.*` | shared helpers: file IO, FNV-1a hash, error buffer, paths |
 | `src/core/wb_gltf.*` | shared glTF accessor decoding + GLB splitting |
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
@@ -53,17 +54,25 @@ skips its own `mkdir` rule.
 
 ## Status
 
-All 19 roadmap slices are done — ECS, spatial, tiles, render, experience
+All 21 roadmap slices are done — ECS, spatial, tiles, render, experience
 containers, slerm-Lua, physics, input/camera/character, GPU, content pipeline,
 networking, avatar/identity, modding sandbox, distribution, editor, server
-meshing, and gametypes. `docs/meta-engine-assessment.md` is the strategic read:
-the five platform pillars and the slice roadmap. `../docs/WWW.md` is the
-doctrine of the space: what it is for, and what it refuses to be.
+meshing, gametypes, stadium travel, and the gamemode-facing space.
+`docs/meta-engine-assessment.md` is the strategic read: the five platform
+pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the space:
+what it is for, and what it refuses to be.
 
 A gametype is a declared, parameterisable package (`mode.json` + an entry
 script + a typed config schema). The engine knows modes, configs, spawns and
 instances — it does not know games. That ignorance is what lets all gametypes
 work.
+
+A gametype's own script declares its stadiums and travels players between
+worlds: `wb.add_gate(dst, tag, x, y, z, radius)` declares a gate in the mode's
+own world, `wb.gate_at(x, y, z)` is the walk-in test, `wb.travel(gate, player,
+team, cfg)` carries a player into the destination gametype's instance at its
+landing tag with the same identity, and `wb.instances()` reads the live
+directory. The mode only ever sees its own world — the engine stays ignorant.
 
 ## Module rules
 
@@ -74,3 +83,6 @@ work.
 - **C11 only.** The D3D12 backend is compiled as C++ behind `extern "C"`
   because MinGW's `d3d12.h` needs it; the API stays C11.
 - **No duplicated helpers.** Shared code lives in `wb_util` and `wb_gltf`.
+- **The Lua bridge stays generic.** `wb_script` carries an opaque space context
+  but never references the worldspace stack; the `wb.*` space bindings live in
+  `wb_space_bind`, which a host links only when it wants them.

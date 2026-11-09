@@ -38,7 +38,7 @@ run: $(TARGET)
 	./$(TARGET) games/main.lua
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -136,9 +136,12 @@ test-avatar: build
 	./$(TEST_AVATAR)
 
 # test-mod: slice 15 -- untrusted mod sandbox (manifest, isolation, budget, reload)
+# wb_mod now installs the space bindings, so it links the worldspace stack.
 TEST_MOD := build/wb_mod_test.exe
 test-mod: build $(LUA_OBJS)
-	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_json.c $(UTIL_SRC) src/lua/wb_script.c src/lua/wb_mod.c tests/wb_mod_test.c $(LUA_OBJS) -o $(TEST_MOD) -lm
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c \
+	  $(WORLDSPACE_SRC) src/lua/wb_script.c src/lua/wb_mod.c src/lua/wb_space_bind.c \
+	  tests/wb_mod_test.c $(LUA_OBJS) -o $(TEST_MOD) -lm
 	./$(TEST_MOD)
 
 # test-dist: slice 16 -- instances, discovery, matchmaking, portals
@@ -182,6 +185,16 @@ TEST_PORTAL := build/wb_portal_test.exe
 test-portal: build
 	$(CC) $(CFLAGS) -Isrc/core $(WORLDSPACE_SRC) tests/wb_portal_test.c -o $(TEST_PORTAL) -lm
 	./$(TEST_PORTAL)
+
+# test-space: slice 21 -- the gamemode-facing space (gates/travel/instances
+# from inside the Lua sandbox). Needs the mod sandbox + the worldspace core.
+TEST_SPACE := build/wb_space_test.exe
+test-space: build $(LUA_OBJS)
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c \
+	  $(WORLDSPACE_SRC) src/lua/wb_script.c src/lua/wb_mod.c \
+	  src/lua/wb_space_bind.c tests/wb_space_test.c \
+	  $(LUA_OBJS) -o $(TEST_SPACE) -lm
+	./$(TEST_SPACE)
 
 clean:
 	rm -rf build

@@ -3,6 +3,8 @@
  */
 #include "wb_mod.h"
 #include "wb_script.h"
+#include "wb_space_bind.h"
+#include "wb_worldspace.h"
 #include "wb_json.h"
 #include "wb_util.h"
 
@@ -18,6 +20,8 @@ struct wb_mod {
     char dir[800];
     wb_mod_manifest manifest;
     wb_world *w;
+    wb_worldspace *ws;          /* the space this mod's gametype belongs to (may be NULL) */
+    char self_mode[WB_MODE_NAME_LEN];
     lua_State *L;
     char source_hash[17];
     char err[1024];
@@ -73,12 +77,22 @@ int wb_mod_budget_exceeded(const wb_mod *mod) {
 }
 
 wb_mod *wb_mod_load(const char *dir, const wb_mod_manifest *m, wb_world *w) {
+    return wb_mod_load_space(dir, m, w, NULL, NULL);
+}
+
+/* Load a mod and attach it to the space (slice 21). `ws` is the worldspace the
+ * mod's gametype lives in; `self_mode` names that gametype, so the mod can
+ * declare gates only in its own world. Both may be NULL (no space bindings). */
+wb_mod *wb_mod_load_space(const char *dir, const wb_mod_manifest *m, wb_world *w,
+                          wb_worldspace *ws, const char *self_mode) {
     if (!m) return NULL;
     wb_mod *mod = (wb_mod *)calloc(1, sizeof *mod);
     if (!mod) return NULL;
     snprintf(mod->dir, sizeof mod->dir, "%s", dir ? dir : "");
     mod->manifest = *m;
     mod->w = w;
+    mod->ws = ws;
+    snprintf(mod->self_mode, sizeof mod->self_mode, "%s", self_mode ? self_mode : "");
 
     char path[800];
     wb_join_path(path, sizeof path, dir, m->entry);
@@ -94,6 +108,16 @@ wb_mod *wb_mod_load(const char *dir, const wb_mod_manifest *m, wb_world *w) {
     if (!mod->L) {
         snprintf(mod->err, sizeof mod->err, "lua state creation failed");
         free(src); free(mod);
+        return NULL;
+    }
+    if (wb_script_sandbox_attach_space(mod->L, ws, mod->self_mode) != 0) {
+        snprintf(mod->err, sizeof mod->err, "cannot attach the space");
+        free(src); wb_mod_free(mod);
+        return NULL;
+    }
+    if (wb_space_bind_install(mod->L) != 0) {
+        snprintf(mod->err, sizeof mod->err, "cannot install the space bindings");
+        free(src); wb_mod_free(mod);
         return NULL;
     }
     if (wb_script_run_sandbox(mod->L, (const char *)src, len, m->entry) != 0) {
@@ -137,6 +161,16 @@ int wb_mod_reload(wb_mod *mod) {
     mod->L = wb_script_create_sandbox_state(mod->w, mod->manifest.budget);
     mod->err[0] = 0;
     if (!mod->L) { free(src); snprintf(mod->err, sizeof mod->err, "lua state creation failed"); return -1; }
+    if (wb_script_sandbox_attach_space(mod->L, mod->ws, mod->self_mode) != 0) {
+        free(src);
+        snprintf(mod->err, sizeof mod->err, "cannot attach the space");
+        return -1;
+    }
+    if (wb_space_bind_install(mod->L) != 0) {
+        free(src);
+        snprintf(mod->err, sizeof mod->err, "cannot install the space bindings");
+        return -1;
+    }
 
     if (wb_script_run_sandbox(mod->L, (const char *)src, len, mod->manifest.entry) != 0) {
         snprintf(mod->err, sizeof mod->err, "reloaded script failed to run");

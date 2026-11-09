@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
     if (!world) { err("out of memory"); return 1; }
     wb_world_setup_comps(world);
 
-    lua_State *L = wb_script_create_state(world);
+    lua_State *L = wb_script_create_state(world, NULL, NULL);
 
     if (luaL_dofile(L, script) != LUA_OK) {
         err(lua_tostring(L, -1));

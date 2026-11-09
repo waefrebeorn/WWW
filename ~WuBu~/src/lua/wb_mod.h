@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+struct wb_worldspace;
+
 typedef struct {
     char id[64];
     char name[128];
@@ -39,6 +41,13 @@ typedef struct wb_mod wb_mod;
 /* Load a mod from `dir` (the manifest's directory). The mod's entry script is
  * compiled and run immediately. Returns NULL on failure. */
 wb_mod *wb_mod_load(const char *dir, const wb_mod_manifest *m, wb_world *w);
+
+/* Load a mod and attach it to a worldspace (slice 21). `self_mode` names the
+ * gametype the mod belongs to, so its wb.add_gate calls land in its own world.
+ * `ws`/`self_mode` may be NULL: the mod then has no space bindings, exactly
+ * like wb_mod_load. */
+wb_mod *wb_mod_load_space(const char *dir, const wb_mod_manifest *m, wb_world *w,
+                          struct wb_worldspace *ws, const char *self_mode);
 void    wb_mod_free(wb_mod *mod);
 
 /* Run one mod step (calls the script's global step(dt)).

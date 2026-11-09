@@ -8,6 +8,8 @@
  */
 #include "wb_ecs.h"
 #include "wb_script.h"
+#include "wb_mode.h"
+#include "wb_worldspace.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
@@ -30,6 +32,15 @@ static const struct { const char *name; size_t size; } kComps[] = {
 
 #define WB_META_WORLD "wb_world_ptr"
 #define SANDBOX_ENV_KEY "wb_sandbox_env"
+#define WB_SPACE_CTX_KEY "wb_space_ctx"
+
+/* The space a sandboxed state is attached to, and the gametype whose world the
+ * state belongs to. Every space binding call is attributed to `self_mode`, so
+ * a mode can declare gates only in its own world. */
+typedef struct {
+    wb_worldspace *ws;
+    char self_mode[WB_MODE_NAME_LEN];
+} wb_space_ctx;
 
 /* register the component schema on a world (idempotent per new world) */
 void wb_world_setup_comps(wb_world *w) {
@@ -120,7 +131,8 @@ static const luaL_Reg kBindings[] = {
     {NULL, NULL},
 };
 
-lua_State *wb_script_create_state(wb_world *w) {
+lua_State *wb_script_create_state(wb_world *w, wb_worldspace *ws,
+                                  const char *self_mode) {
     lua_State *L = luaL_newstate();
     if (!L) return NULL;
     luaL_openlibs(L);
@@ -128,6 +140,10 @@ lua_State *wb_script_create_state(wb_world *w) {
     lua_setfield(L, LUA_REGISTRYINDEX, WB_META_WORLD);
     luaL_newlib(L, kBindings);
     lua_setglobal(L, "wb");
+    /* Carry the space context (if any). The bindings themselves are installed
+     * by wb_space_bind_install(), so this file never references the
+     * worldspace stack. */
+    if (ws) wb_script_sandbox_attach_space(L, ws, self_mode);
     return L;
 }
 
@@ -243,6 +259,42 @@ void wb_script_set_budget(lua_State *L, long budget) {
     st->exceeded = 0;
     if (budget > 0) lua_sethook(L, sandbox_hook, LUA_MASKCOUNT, 100);
     else            lua_sethook(L, NULL, 0, 0);
+}
+
+/* Attach the space to a state (slice 21). The state carries an opaque context
+ * -- the worldspace, and the gametype the script belongs to, so every space
+ * call is attributed to that mode's own world. `ws` may be NULL, in which case
+ * the call is a no-op returning 0 (a state with no space simply has no space
+ * bindings). The bindings themselves are installed separately by
+ * wb_space_bind_install(), which lives in wb_space_bind.c so this file never
+ * references the worldspace stack. */
+int wb_script_sandbox_attach_space(lua_State *L, wb_worldspace *ws,
+                                   const char *self_mode) {
+    if (!L) return -1;
+    if (!ws) return 0;
+
+    wb_space_ctx *ctx = (wb_space_ctx *)calloc(1, sizeof *ctx);
+    if (!ctx) return -1;
+    ctx->ws = ws;
+    snprintf(ctx->self_mode, sizeof ctx->self_mode, "%s", self_mode ? self_mode : "");
+    lua_pushlightuserdata(L, ctx);
+    lua_setfield(L, LUA_REGISTRYINDEX, WB_SPACE_CTX_KEY);
+    return 0;
+}
+
+/* Read back the space context attached to a state. Returns 0 when one is
+ * attached, -1 when there is none. `self_mode` may be NULL. */
+int wb_script_space_ctx(lua_State *L, wb_worldspace **ws,
+                        char *self_mode, size_t self_mode_sz) {
+    if (!L) return -1;
+    lua_getfield(L, LUA_REGISTRYINDEX, WB_SPACE_CTX_KEY);
+    wb_space_ctx *ctx = (wb_space_ctx *)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    if (!ctx || !ctx->ws) return -1;
+    if (ws) *ws = ctx->ws;
+    if (self_mode && self_mode_sz)
+        snprintf(self_mode, self_mode_sz, "%s", ctx->self_mode);
+    return 0;
 }
 
 /* Run a chunk of untrusted source under the sandbox: load it, swap in the
