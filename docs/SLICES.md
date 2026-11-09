@@ -14,7 +14,7 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 15 | modding sandbox | untrusted-code sandbox (Luau model), mod manifest, hot reload | `make test-mod` — 21 | ✅ |
 | 16 | experience distribution | portals/stadiums, instance matchmaking, discovery hooks | `make test-dist` — 41 | ✅ |
 | 17 | editor | in-engine world editing + live edit | `make test-edit` — 37 | ✅ |
-| 18 | server meshing | authority handover, per-component authority, persistent entity streaming | `make test-mesh` | ⬜ |
+| 18 | server meshing | authority handover, per-component authority, persistent entity streaming | `make test-mesh` — 37 | ✅ |
 
 ## Running totals
 
