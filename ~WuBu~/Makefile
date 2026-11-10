@@ -23,7 +23,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c src/core/wb_tagheap.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -52,7 +52,7 @@ run-mode: $(TARGET)
 # (make e=4551). It is not a code failure. Workaround: delete the named exe and
 # re-run -- the next link usually passes. A full-suite run may need several
 # delete-and-retry rounds on a fresh checkout.
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -291,6 +291,12 @@ TEST_HIVE := build/wb_hive_test.exe
 test-hive: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c tests/wb_hive_test.c -o $(TEST_HIVE)
 	./$(TEST_HIVE)
+
+# test-tagheap: LP-02 stone 3 -- tag-partitioned linear heap (hive block registry)
+TEST_TAGHEAP := build/wb_tagheap_test.exe
+test-tagheap: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c src/core/wb_tagheap.c tests/wb_tagheap_test.c -o $(TEST_TAGHEAP)
+	./$(TEST_TAGHEAP)
 
 clean:
 	rm -rf build
