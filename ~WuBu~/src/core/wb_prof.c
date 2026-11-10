@@ -89,6 +89,7 @@ void wb_prof_begin_frame(wb_prof *p) { (void)p; /* bookkeeping is end-driven */ 
 
 void wb_prof_end_frame(wb_prof *p) {
     if (!p) return;
+    p->overran = 0;                      /* this frame only */
     for (int i = 0; i < p->nslots; i++) {
         wb_prof_slot *s = p->slot[i];
         if (!s) continue;
@@ -101,11 +102,28 @@ void wb_prof_end_frame(wb_prof *p) {
             v = s->accum - s->frame;   /* this frame's delta */
             s->frame = s->accum;
         }
+        if (s->budget > 0.f && v > (double)s->budget) {
+            s->over = 1;
+            p->overran = 1;
+            p->overruns++;
+        } else {
+            s->over = 0;
+        }
         s->ring[s->written % p->ring] = (float)v;
         s->written++;
     }
     p->frames++;
 }
+
+void wb_prof_set_budget(wb_prof *p, const char *name, float value) {
+    if (!p || !name) return;
+    wb_prof_slot *s = wb_prof_acquire(p, name, 0);
+    if (!s) return;                     /* existing zone/counter found, or created */
+    s->budget = value;
+}
+
+int wb_prof_overran(wb_prof *p) { return p ? p->overran : 0; }
+unsigned long wb_prof_total_overruns(wb_prof *p) { return p ? p->overruns : 0; }
 
 wb_prof *wb_prof_default(void) {
     static wb_prof *g = NULL;
@@ -186,12 +204,16 @@ int wb_prof_report(wb_prof *p, FILE *f) {
         wb_prof_stat st;
         wb_prof_summary(p, s->name, &st);
         if (s->is_zone)
-            fprintf(f, "  %-20s zone  last=%7.2fms mean=%7.2fms min=%7.2f max=%7.2f frames=%d\n",
+            fprintf(f, "  %-20s zone  last=%7.2fms mean=%7.2fms min=%7.2f max=%7.2f frames=%d%s%s\n",
                     s->name, st.last * 1000.0, st.mean * 1000.0,
-                    st.mmin * 1000.0, st.mmax * 1000.0, st.n);
+                    st.mmin * 1000.0, st.mmax * 1000.0, st.n,
+                    s->budget > 0.f ? " budget=" : "",
+                    s->budget > 0.f ? (s->over ? "OVER!" : "") : "");
         else
-            fprintf(f, "  %-20s cnt   last=%11.1f mean=%11.1f min=%11.1f max=%11.1f frames=%d\n",
-                    s->name, st.last, st.mean, st.mmin, st.mmax, st.n);
+            fprintf(f, "  %-20s cnt   last=%11.1f mean=%11.1f min=%11.1f max=%11.1f frames=%d%s%s\n",
+                    s->name, st.last, st.mean, st.mmin, st.mmax, st.n,
+                    s->budget > 0.f ? " budget=" : "",
+                    s->budget > 0.f ? (s->over ? "OVER!" : "") : "");
         shown++;
     }
     return shown;

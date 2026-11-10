@@ -113,6 +113,44 @@ int main(void) {
     CHECK(shown >= 4, "report lists the slots (alive, busy, outer, inner)");
     if (tmp) fclose(tmp);
 
+    /* ---- budget gate: a frame that blows its allowance trips it ---------- */
+    wb_prof *q = wb_prof_new(4);
+    double *trips = wb_prof_counter(q, "trips");
+    wb_prof_set_budget(q, "trips", 5.0);          /* delta must stay < 5 */
+    for (int f = 0; f < 2; f++) {
+        wb_prof_begin_frame(q);
+        *trips += 10.0;
+        wb_prof_end_frame(q);
+    }
+    CHECK(wb_prof_overran(q) == 1, "over-budget frame trips the gate");
+    CHECK(wb_prof_total_overruns(q) == 2, "every over-budget frame counted");
+
+    double *ok = wb_prof_counter(q, "ok");
+    wb_prof_set_budget(q, "ok", 5.0);
+    for (int f = 0; f < 2; f++) {
+        wb_prof_begin_frame(q);
+        *ok += 1.0;
+        wb_prof_end_frame(q);
+    }
+    CHECK(wb_prof_overran(q) == 0, "within-budget frame does not trip");
+
+    /* establish the zone first, then budget its steady-state time */
+    wb_prof_begin_frame(q);
+    WB_PROF_ZONE(q, "busyzone") { busy(0.001); }
+    wb_prof_end_frame(q);
+    wb_prof_set_budget(q, "busyzone", 0.000001f);  /* 1us: busy() blows it */
+    wb_prof_begin_frame(q);
+    WB_PROF_ZONE(q, "busyzone") { busy(0.002); }
+    wb_prof_end_frame(q);
+    CHECK(wb_prof_overran(q) == 1, "tight zone time budget trips");
+
+    wb_prof_set_budget(q, "busyzone", 10.0f);      /* 10s: nowhere near */
+    wb_prof_begin_frame(q);
+    WB_PROF_ZONE(q, "busyzone") { busy(0.001); }
+    wb_prof_end_frame(q);
+    CHECK(wb_prof_overran(q) == 0, "generous budget does not trip");
+    wb_prof_dispose(q);
+
     /* ---- null-safety ---------------------------------------------------- */
     wb_prof_summary(NULL, "x", &st);
     st.n = 0; (void)st;

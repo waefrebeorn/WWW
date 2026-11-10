@@ -29,6 +29,9 @@ typedef struct wb_prof_slot {
     char   name[WB_PROF_STRLEN];
     int    is_zone;
     int    zones;        /* open/close events into the zone this frame */
+    float  budget;       /* >0: per-frame allowance in the slot's units;
+                            0 = unbudgeted. Overrun trips wb_prof_overran */
+    int    over;         /* 1 if this slot exceeded budget last frame */
     double accum;        /* counter running total, or zone seconds this frame */
     double frame;        /* counter total at last end_frame (for the delta) */
     int    written;      /* frames recorded into the ring (chronological) */
@@ -39,6 +42,8 @@ typedef struct {
     int    ring;         /* how many frames the ring keeps */
     int    nslots;
     int    frames;       /* end_frames seen */
+    int    overran;      /* any budgeted slot overran THIS frame (reset each frame) */
+    unsigned long overruns;  /* cumulative budget overruns across frames */
     wb_prof_slot *slot[WB_PROF_MAXSLOTS];  /* by first-fit index */
     int    bucket[WB_PROF_NBUCKET];        /* open-addressed, stores idx+1 */
 } wb_prof;
@@ -65,6 +70,13 @@ void     wb_prof_zone_end(wb_prof *p, const char *name);
 
 int      wb_prof_summary(wb_prof *p, const char *name, wb_prof_stat *out);
 int      wb_prof_report(wb_prof *p, FILE *f);
+
+/* Budget gate (LP-05): give a slot a per-frame allowance; an overrun trips
+ * wb_prof_overran() for that frame and increments wb_prof_total_overruns().
+ * Units are the slot's own -- seconds for zones, raw count for counters. */
+void           wb_prof_set_budget(wb_prof *p, const char *name, float value);
+int            wb_prof_overran(wb_prof *p);          /* any budgeted slot overran last frame */
+unsigned long  wb_prof_total_overruns(wb_prof *p);
 
 /* convenience scoping macro: WB_PROF_ZONE(p, "name") { ... } */
 #define WB_PROF_ZONE(_p, _name) \
