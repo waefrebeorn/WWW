@@ -82,7 +82,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-15 | LOD & HLOD | L | LP-10 | [523] | **SHIPPED** (LOD selection with hysteresis + HLOD clustering) |
 | LP-16 | GPU-driven rendering | XL | LP-06, LP-11, LP-14 | [42] | **PARTIAL** (draw compaction shipped) |
 | LP-17 | Mesh shaders & virtualized geometry | XL | LP-16, LP-10 | [401] | TODO |
-| LP-18 | Temporal upscaling | M | LP-12 | [40] | TODO |
+| LP-18 | Temporal upscaling | M | LP-12 | [40] | **PARTIAL** (temporal accumulation w/ reprojection + color clip shipped) |
 | LP-19 | GPU particles | L | LP-16 | [208] | TODO |
 | LP-20 | Real-time global illumination | L | LP-12 | [531][529] | TODO |
 | LP-21 | Shader build dependency tracking | M | LP-12 | [524][527] | TODO |
