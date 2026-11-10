@@ -141,7 +141,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
-| LP-36 | Asset pipeline as a graph | L | LP-09 | [481][84] | TODO |
+| LP-36 | Asset pipeline as a graph | L | LP-09 | [481][84] | **PARTIAL** (dependency graph + topo order + dirty closure shipped) |
 | LP-37 | Import-time shader processing | M | LP-12 | [96] | TODO |
 | LP-38 | Shader graphs & material editor | L | LP-12 | [232][274] | TODO |
 | LP-39 | Visual scripting for designers | L | LP-36 | [233] | TODO |
