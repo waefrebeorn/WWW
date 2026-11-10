@@ -1,9 +1,9 @@
 /*
- * wb_hive.h -- THE HIVE: linked fixed blocks + skipfield + freelist (LP-02).
+ * wb_hive.h -- THE HIVE: linked fixed blocks + skipfield + freelist.
  *
- * Slermed from the wubuwizard/slermes HIVE (wubu_hive.c) and re-cut for WWW:
- * a general memory substrate that replaces FIFO rings and malloc/free chains
- * for anything with stable slots and high churn.
+ * Slermed from the wubuwizard/slermes HIVE (wubu_hive.c) and re-cut as the
+ * reusable substrate it always was: this replaces FIFO rings and malloc/free
+ * chains anywhere a project needs stable slots and high churn.
  *
  *   struct block {
  *       unsigned char *elems;  // inline storage, cap * elem_size
@@ -50,6 +50,9 @@ typedef struct {
     wb_hive_slot *free_entries;   /* LIFO stack of reusable slots */
     size_t       n_free, free_cap;
     size_t       allocs, reuses;
+    wb_hive_block *hint;          /* the block of the most recent emit: drops
+                                     usually reverse the emits, so this makes the
+                                     common drop O(1) instead of a block scan */
 } wb_hive;
 
 /* elem_size must be > 0; block_cap is the fixed slots-per-block. */

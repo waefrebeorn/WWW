@@ -1,5 +1,5 @@
 /*
- * wb_budget_test.c -- LP-05 stone 1 gate: named byte budgets.
+ * wb_budget_test.c named byte budgets.
  *
  * Devil's-advocate cases: latched over-budget, refund clamping, peak tracking,
  * unlimited budgets, unknown names, duplicate declarations, table capacity,

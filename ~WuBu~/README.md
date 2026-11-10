@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 65 gates, 6776 assertions
+mingw32-make test       # 66 gates, 6809 assertions
 mingw32-make run        # runs the omniverse-hub gametype
 ./build/wubu_engine.exe games omniverse-hub
 ```
@@ -48,10 +48,20 @@ skips its own `mkdir` rule.
 | `src/core/wb_gltf.*` | shared glTF accessor decoding + GLB splitting |
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
 | `src/lv/` | slerm-Lua: the C11 interpreter (arena/value/lex/parse/eval/host) |
+| `src/core/wb_hive.*`, `wb_tagheap.*`, `wb_budget.*`, `wb_frame.*`, `wb_tls.*`, `wb_atomic.*`, `wb_pool.*` | the hive memory substrate (see below) |
 | `src/net/` | networking: AOI / server / client / loopback + server meshing |
 | `tests/` | one harness per module |
 | `games/` | Lua game scripts |
 | `docs/` | design notes + the meta-engine assessment |
+
+### The hive modules come from WuBuHIVE
+
+`wb_hive`, `wb_tagheap`, `wb_budget`, `wb_frame`, `wb_tls`, `wb_atomic` and
+`wb_pool` are kept in sync with
+[WuBuHIVE](https://github.com/waefrebeorn/WuBuHIVE), where this memory substrate
+is extracted for reuse across all wubu projects. **Fix them there, then sync
+them back** — the copies here carry the same `wb_` prefix so the sync is a
+byte-for-byte copy, and a divergence shows up as a diff.
 
 ## Status
 

@@ -1,5 +1,5 @@
 /*
- * wb_hive.c -- THE HIVE (LP-02). See wb_hive.h.
+ * wb_hive.c -- THE HIVE. See wb_hive.h.
  */
 #include "wb_hive.h"
 
@@ -75,6 +75,7 @@ void *wb_hive_emit(wb_hive *h) {
     /* 1. reuse a freelist slot (LIFO) */
     if (wb_hive_free_pop(h, &b, &s) == 0) {
         b->skip[s] = 0; b->live++; h->total_live++; h->reuses++;
+        h->hint = b;
         return b->elems + s * h->elem_size;
     }
     /* 2. append to the tail block. Freelist-less tail slots are contiguous at
@@ -82,6 +83,7 @@ void *wb_hive_emit(wb_hive *h) {
     if (h->tail && h->tail->live < h->tail->cap) {
         b = h->tail; s = b->live;
         b->skip[s] = 0; b->live++; h->total_live++; h->allocs++;
+        h->hint = b;
         return b->elems + s * h->elem_size;
     }
     /* 3. a new block */
@@ -93,6 +95,7 @@ void *wb_hive_emit(wb_hive *h) {
     h->n_blocks++;
     h->total_live++;
     h->allocs++;
+    h->hint = b;
     return b->elems;
 }
 
@@ -102,12 +105,20 @@ void wb_hive_drop_at(wb_hive *h, wb_hive_block *b, size_t slot) {
     b->elems[slot * h->elem_size] = 0;   /* clear the first byte; contents are dead */
     b->live--;
     h->total_live--;
+    h->hint = b;                         /* drops often reverse the emits */
     wb_hive_free_push(h, b, slot);
 }
 
 void wb_hive_drop(wb_hive *h, void *elem) {
     if (!h || !elem) return;
     unsigned char *p = (unsigned char *)elem;
+    /* the hint is the block of the most recent emit; drops usually reverse the
+     * emits, so this is the common case and costs one range check */
+    wb_hive_block *hint = h->hint;
+    if (hint && p >= hint->elems && p < hint->elems + hint->cap * h->elem_size) {
+        wb_hive_drop_at(h, hint, (size_t)(p - hint->elems) / h->elem_size);
+        return;
+    }
     for (wb_hive_block *b = h->head; b; b = b->next) {
         if (p < b->elems || p >= b->elems + b->cap * h->elem_size) continue;
         size_t s = (size_t)(p - b->elems) / h->elem_size;

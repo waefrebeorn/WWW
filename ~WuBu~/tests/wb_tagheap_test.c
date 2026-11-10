@@ -1,5 +1,5 @@
 /*
- * wb_tagheap_test.c -- LP-02 stone 3 gate: the tagged linear heap.
+ * wb_tagheap_test.c the tagged linear heap.
  *
  * Devil's-advocate cases: budget enforcement, tag isolation, block reuse after
  * a tag reset (no re-malloc), alignment, peak accounting, and determinism.

@@ -1,5 +1,5 @@
 /*
- * wb_pool_test.c -- LP-06 stone 2 gate: the worker pool.
+ * wb_pool_test.c the worker pool.
  *
  * Proves the pool runs every submitted job, that jobs writing disjoint slots
  * never interfere, and that the deterministic parallel-for covers [0,n)

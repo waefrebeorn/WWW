@@ -1,5 +1,5 @@
 /*
- * wb_tagheap.h -- tag-partitioned linear heap (LP-02 stone 3).
+ * wb_tagheap.h -- tag-partitioned linear heap.
  *
  * Naughty Dog's tagged-lifetime heap: allocations carry a tag, the heap is a
  * set of large blocks bumped per tag, and you free a TAG rather than a pointer

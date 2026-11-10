@@ -1,5 +1,5 @@
 /*
- * wb_budget.c -- named byte budgets (LP-05 stone 1). See wb_budget.h.
+ * wb_budget.c -- named byte budgets. See wb_budget.h.
  */
 #include "wb_budget.h"
 

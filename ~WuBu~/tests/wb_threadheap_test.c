@@ -1,5 +1,5 @@
 /*
- * wb_threadheap_test.c -- LP-02 stone 4 gate: per-thread tag heaps.
+ * wb_threadheap_test.c per-thread tag heaps.
  *
  * Each thread gets its own heap, so the allocation path needs no lock. The gate
  * proves the heaps are per-thread (distinct instances, distinct addresses) and

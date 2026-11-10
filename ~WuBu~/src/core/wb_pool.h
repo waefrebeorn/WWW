@@ -1,5 +1,5 @@
 /*
- * wb_pool.h -- worker pool (LP-06 stone 2).
+ * wb_pool.h -- worker pool over hive memory.
  *
  * A fixed-size pool of worker threads with a mutex-protected FIFO queue. The
  * design keeps the determinism discipline: jobs are independent, and the

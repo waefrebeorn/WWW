@@ -1,5 +1,5 @@
 /*
- * wb_frame.c -- frame allocator (LP-02 stone 1). See wb_frame.h.
+ * wb_frame.c -- frame allocator. See wb_frame.h.
  */
 #include "wb_frame.h"
 

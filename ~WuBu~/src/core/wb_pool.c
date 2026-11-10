@@ -1,5 +1,5 @@
 /*
- * wb_pool.c -- worker pool (LP-06 stone 2). See wb_pool.h.
+ * wb_pool.c -- worker pool. See wb_pool.h.
  *
  * The job queue is HIVE memory, not a malloc/FIFO chain: every job record is a
  * slot in a wb_hive (linked fixed blocks + skipfield + freelist), so a record's

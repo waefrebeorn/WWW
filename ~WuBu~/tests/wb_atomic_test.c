@@ -1,5 +1,5 @@
 /*
- * wb_atomic_test.c -- LP-08 stone 2 gate: memory ordering.
+ * wb_atomic_test.c -- memory ordering.
  *
  * Message passing: a producer publishes `data` with a release store and a
  * consumer reads it after an acquire load of the flag. The acquire/release pair
@@ -57,6 +57,21 @@ static void *adder(void *arg) {
 }
 
 int main(void) {
+    /* ---- the wrappers themselves, single-threaded ---- */
+    wb_atomic_int v = (wb_atomic_int)0;
+    wb_atomic_store_release(&v, 7);
+    CHECK(wb_atomic_load_acquire(&v) == 7, "a release store is visible to an acquire load");
+    CHECK(wb_atomic_load_relaxed(&v) == 7, "a release store is visible to a relaxed load");
+    wb_atomic_store_release(&v, 0);
+    CHECK(wb_atomic_load_acquire(&v) == 0, "the store is overwritten");
+
+    wb_atomic_int c = (wb_atomic_int)10;
+    int prev = wb_atomic_fetch_add_relaxed(&c, 5);
+    CHECK(prev == 10, "fetch-add returns the previous value");
+    CHECK(wb_atomic_load_relaxed(&c) == 15, "fetch-add adds exactly");
+    wb_atomic_fetch_add_relaxed(&c, -5);
+    CHECK(wb_atomic_load_relaxed(&c) == 10, "fetch-add subtracts with a negative operand");
+
     /* ---- message passing: release/acquire publishes the payload ---- */
     g_flag = (wb_atomic_int)0;
     g_data = 0; g_stale = 0;

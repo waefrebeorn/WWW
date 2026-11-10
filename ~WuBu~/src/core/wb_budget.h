@@ -1,5 +1,5 @@
 /*
- * wb_budget.h -- named byte budgets (LP-05 stone 1).
+ * wb_budget.h -- named byte budgets.
  *
  * Every subsystem gets a named budget; the frame's allocations are charged to
  * it and the build FAILS when a budget is exceeded instead of letting a slow

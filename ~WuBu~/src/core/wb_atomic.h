@@ -1,5 +1,5 @@
 /*
- * wb_atomic.h -- memory-ordering primitives (LP-08 stone 2).
+ * wb_atomic.h -- memory-ordering primitives.
  *
  * Thin, explicit wrappers over C11 atomics so every call site states its
  * ordering instead of silently paying for seq_cst. The two orders that matter

@@ -1,7 +1,8 @@
 /*
- * wb_tagheap.c -- tag-partitioned linear heap (LP-02 stone 3). See wb_tagheap.h.
+ * wb_tagheap.c -- tag-partitioned linear heap. See wb_tagheap.h.
  */
 #include "wb_tagheap.h"
+#include "wb_tls.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -136,52 +137,24 @@ int wb_tagheap_over(const wb_tagheap *h, uint32_t tag) {
 
 /* ---- per-thread heaps ---------------------------------------------------- */
 
-/* Windows native TLS (kernel32) rather than _Thread_local: this machine's Code
- * Integrity policy blocks libwinpthread-1.dll, and the static libpthread.a
- * still imports from it via emutls -- which also fails to give each
- * pthread-created thread its own storage under a static link. Win32 TLS needs
- * no such support. A per-thread heap is intentionally not freed at thread exit
- * (Win32 TLS has no destructor); the process owns it. */
-#ifdef _WIN32
-#include <windows.h>
-
-static DWORD wb_tagheap_tls(void) {
-    static DWORD idx = TLS_OUT_OF_INDEXES;
-    static volatile LONG state = 0;          /* 0 = uninit, 1 = initing, 2 = done */
-    if (state == 2) return idx;
-    if (InterlockedCompareExchange(&state, 1, 0) == 0) {
-        idx = TlsAlloc();
-        state = 2;
-    } else {
-        while (state != 2) { }
-    }
-    return idx;
-}
-
+/* Each thread gets its own tag heap, so the common allocation path needs no
+ * lock at all (Naughty Dog: per-thread blocks make 99.9% of allocations
+ * lock-free). The slot itself is wb_tls's, so the platform answer lives in one
+ * place. A per-thread heap is intentionally not freed at thread exit (Win32 TLS
+ * and pthread keys both allow a destructor, but the heap outlives the thread by
+ * design here); the process owns it. */
 wb_tagheap *wb_tagheap_thread(void) {
-    DWORD idx = wb_tagheap_tls();
-    if (idx == TLS_OUT_OF_INDEXES) return NULL;
-    wb_tagheap *h = (wb_tagheap *)TlsGetValue(idx);
+    wb_tls *slot = wb_tls_slot();
+    if (!slot) return NULL;
+    wb_tagheap *h = (wb_tagheap *)wb_tls_get(slot);
     if (!h) {
         h = (wb_tagheap *)calloc(1, sizeof(*h));
         if (!h) return NULL;
         if (wb_tagheap_init(h, 2u << 20) != 0) { free(h); return NULL; }
-        TlsSetValue(idx, h);
+        wb_tls_set(slot, h);
     }
     return h;
 }
-#else
-static _Thread_local wb_tagheap wb_tagheap_tls;
-static _Thread_local int        wb_tagheap_tls_ready;
-
-wb_tagheap *wb_tagheap_thread(void) {
-    if (!wb_tagheap_tls_ready) {
-        if (wb_tagheap_init(&wb_tagheap_tls, 2u << 20) != 0) return NULL;
-        wb_tagheap_tls_ready = 1;
-    }
-    return &wb_tagheap_tls;
-}
-#endif
 
 void *wb_tagheap_thread_alloc(uint32_t tag, size_t bytes, size_t align) {
     wb_tagheap *h = wb_tagheap_thread();

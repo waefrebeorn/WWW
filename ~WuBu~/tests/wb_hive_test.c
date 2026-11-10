@@ -1,5 +1,5 @@
 /*
- * wb_hive_test.c -- LP-02 gate: THE HIVE, adversarially.
+ * wb_hive_test.c THE HIVE, adversarially.
  *
  * The devil's-advocate cases: holes in the middle, erase/insert churn, block
  * boundaries, double-erase, unknown-pointer erase, freelist exhaustion and
@@ -137,6 +137,35 @@ int main(void) {
     wb_hive_drop_at(&h, h.head, 0);            /* already erased: no-op */
     CHECK(wb_hive_live(&h) == 1, "drop_at on an erased slot is a no-op");
     CHECK(y != NULL, "the other slot is untouched");
+
+    /* ---- the emit/drop hint: drops usually reverse the emits ---- */
+    wb_hive_clear(&h);
+    payload *rev[200];
+    for (int i = 0; i < 200; i++) rev[i] = (payload *)wb_hive_emit(&h);
+    CHECK(h.n_blocks == 4, "200 slots span four blocks");
+    for (int i = 199; i >= 0; i--) wb_hive_drop(&h, rev[i]);   /* exact reverse order */
+    CHECK(wb_hive_live(&h) == 0, "dropping in reverse emit order empties the hive");
+    CHECK(wb_hive_validate(&h) == 0, "the hive is consistent after reverse drops");
+
+    /* ---- a drop from an old block while the hint points elsewhere ---- */
+    wb_hive_clear(&h);
+    payload *old = (payload *)wb_hive_emit(&h);       /* block 0, slot 0 */
+    for (int i = 0; i < 200; i++) (void)wb_hive_emit(&h);
+    CHECK(h.n_blocks == 4, "the later emits opened more blocks");
+    wb_hive_drop(&h, old);                            /* the hint must miss, the scan must find */
+    CHECK(wb_hive_live(&h) == 200, "an old-block drop is found by the scan");
+    CHECK(wb_hive_validate(&h) == 0, "the hive is consistent after an old-block drop");
+    old = (payload *)wb_hive_emit(&h);
+    CHECK(old != NULL, "the hole from the old-block drop is reused");
+    CHECK(wb_hive_live(&h) == 201, "the reuse is live");
+
+    /* ---- validate catches a broken invariant ---- */
+    CHECK(wb_hive_validate(&h) == 0, "the hive validates before sabotage");
+    h.head->live = 999;                                /* a lie about the live count */
+    CHECK(wb_hive_validate(&h) == -1, "a wrong block live count is reported");
+    h.head->live = 0;
+    for (size_t s = 0; s < h.head->cap; s++) if (h.head->skip[s] == 0) { h.head->live++; }
+    CHECK(wb_hive_validate(&h) == 0, "restoring the count restores validity");
 
     wb_hive_clear(&h);
     CHECK(wb_hive_empty(&h), "final clear");

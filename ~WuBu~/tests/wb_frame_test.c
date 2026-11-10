@@ -1,5 +1,5 @@
 /*
- * wb_frame_test.c -- LP-02 stone 1 gate: the frame allocator.
+ * wb_frame_test.c the frame allocator.
  *
  * Proves sequential allocation does not overlap, alignment is honoured, reset
  * returns the buffer to empty and the same addresses are reused, and an

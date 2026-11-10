@@ -1,5 +1,5 @@
 /*
- * wb_frame.h -- frame allocator (LP-02 stone 1).
+ * wb_frame.h -- frame allocator.
  *
  * A bump allocator over a fixed buffer that resets once per frame. Per-frame
  * temporaries (command buffers, visibility lists, scratch) are allocated here
