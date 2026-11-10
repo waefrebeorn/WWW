@@ -55,7 +55,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-06 | Job system (fibers/work-stealing, counters) | L | LP-01, LP-07 | [5][552] | **SHIPPED** (job graph + worker pool w/ deterministic parallel-for) |
 | LP-07 | Data-access validation (safe-point resource tracking) | M | LP-06 | [6][18] | **PARTIAL** (acquire/release tracker + safe-point check shipped) |
 | LP-08 | SIMD, cache-conscious layout, memory ordering | M | LP-06 | [554][548] | **PARTIAL** (folded-poly SIMD + explicit release/acquire atomics shipped) |
-| LP-10 | Geometry optimization pass (vertex cache, meshlets) | M | LP-08 | [322][318] | **PARTIAL** (Forsyth vertex-cache reorder shipped; meshlets next) |
+| LP-10 | Geometry optimization pass (vertex cache, meshlets) | M | LP-08 | [322][318] | **SHIPPED** (Forsyth vertex-cache reorder + meshlet partitioning) |
 
 ### New — INSTRUMENT + SIMULATE (third-degree)
 
