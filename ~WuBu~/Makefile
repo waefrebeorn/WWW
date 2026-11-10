@@ -46,7 +46,7 @@ run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -231,6 +231,12 @@ TEST_SNAP := build/wb_snap_test.exe
 test-snap: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_ecs.c src/core/wb_snap.c src/core/wb_det.c tests/wb_snap_test.c -o $(TEST_SNAP)
 	./$(TEST_SNAP)
+
+# test-math: LP-03 -- deterministic fixed-point + integer CORDIC trig
+TEST_MATH := build/wb_math_test.exe
+test-math: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_math.c tests/wb_math_test.c -o $(TEST_MATH) -lm
+	./$(TEST_MATH)
 
 clean:
 	rm -rf build
