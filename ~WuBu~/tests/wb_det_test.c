@@ -67,6 +67,33 @@ int main(void) {
     /* empty input hashes to the offset basis, deterministic */
     CHECK(wb_det_checksum(NULL, 0) == WB_DET_FNV_OFFSET, "empty checksum is the FNV offset");
 
+    /* ---- fixed timestep: exact at 64Hz, deterministic, carries a remainder ---- */
+    wb_det_fixed f;
+    wb_det_fixed_init(&f, 1.0 / 64.0);
+    int steps = wb_det_fixed_advance(&f, 1.0);
+    CHECK(steps == 64, "one second at 64Hz is exactly 64 simulation steps");
+    CHECK(wb_det_fixed_remainder(&f) == 0.0, "64Hz carries no remainder (exact delta time)");
+
+    wb_det_fixed g, hh;
+    wb_det_fixed_init(&g, 1.0 / 64.0);
+    wb_det_fixed_init(&hh, 1.0 / 64.0);
+    const double partials[5] = {0.016, 0.017, 0.015, 0.032, 0.020};
+    long total_g = 0, total_h = 0;
+    for (int i = 0; i < 5; i++) { total_g += wb_det_fixed_advance(&g, partials[i]); }
+    for (int i = 0; i < 5; i++) { total_h += wb_det_fixed_advance(&hh, partials[i]); }
+    CHECK(total_g == total_h, "identical dt sequences step identically (deterministic)");
+    CHECK(wb_det_fixed_remainder(&g) == wb_det_fixed_remainder(&hh),
+          "remainder is identical for identical dt sequences");
+    CHECK(total_g > 0 && total_g <= 7 && wb_det_fixed_remainder(&g) >= 0.0 && wb_det_fixed_remainder(&g) < (1.0 / 64.0),
+          "plausible step count and remainder in [0, step)");
+
+    /* partial steps accumulate to exactly one whole step at 64Hz */
+    wb_det_fixed_init(&f, 1.0 / 64.0);
+    int gathered = 0;
+    for (int i = 0; i < 64; i++) gathered += wb_det_fixed_advance(&f, 1.0 / 64.0);
+    CHECK(gathered == 64 && wb_det_fixed_remainder(&f) == 0.0,
+          "64 exact partials gather into 64 steps with no drift");
+
     printf("%d checks, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

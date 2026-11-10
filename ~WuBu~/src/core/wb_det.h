@@ -29,4 +29,16 @@ uint64_t wb_det_checksum_stream(uint64_t h, const void *data, size_t n);
 #define WB_DET_FNV_OFFSET 0xcbf29ce484222325ULL
 #define WB_DET_FNV_PRIME  0x100000001b3ULL
 
+/* ---- fixed timestep accumulator (LP-03/LP-04 time base) -----------------
+ * Advances a simulation step clock from a stream of real elapsed times without
+ * ever reading the wall clock. Whole steps are consumed and returned; the
+ * carried remainder is the render-interpolation target. Pure IEEE double
+ * arithmetic, so identical on any host. A power-of-two-ish rate (64 Hz =
+ * 1/64 s) makes whole steps land exactly; 60 Hz does not. */
+typedef struct { double step; double acc; } wb_det_fixed;
+
+void   wb_det_fixed_init(wb_det_fixed *f, double frame_seconds);
+int    wb_det_fixed_advance(wb_det_fixed *f, double dt); /* #whole steps, dt>=0 */
+double wb_det_fixed_remainder(const wb_det_fixed *f);    /* [0,step) carried time */
+
 #endif /* WB_DET_H */
