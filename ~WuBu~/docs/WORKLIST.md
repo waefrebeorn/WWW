@@ -121,7 +121,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-30 | Lag compensation | M | LP-28 | [506] | **PARTIAL** (rewind buffer + interpolation shipped) |
 | LP-31 | Rollback netcode | L | LP-03, LP-04, LP-28 | [148][66] | **PARTIAL** (per-tick state ring + restore/re-simulate shipped) |
 | LP-32 | Network debugging & profiling tooling | M | LP-28 | [509] | **PARTIAL** (deterministic latency/jitter/loss model shipped) |
-| LP-33 | Server meshing control plane | L | LP-31 | [508] | TODO |
+| LP-33 | Server meshing control plane | L | LP-31 | [508] | **PARTIAL** (authority handoff state machine + epoch fence shipped) |
 | LP-34 | Matchmaking & parties | L | LP-33 | [510] | TODO |
 | LP-35 | Anti-cheat & client attestation | L | LP-31, LP-71 | [425][516] | TODO |
 | LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | TODO |
