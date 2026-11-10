@@ -1,6 +1,10 @@
 # WuBu Engine -- build
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
+# Pin make's command shell to the Git bash. Make auto-detects Hermes's
+# bundled sh.exe (WindowsApps, Smart App Control-blocked) and dies with
+# 'Access is denied' on the first gate. This is environmental, not code.
+SHELL   := C:/Program Files/Git/bin/sh.exe
 LUA_SRC := $(filter-out %/lua.c %/onelua.c %/ltests.c,$(wildcard thirdparty/lua5.4/*.c))
 # Lua 5.4 is compiled once into objects and linked; recompiling 34 files for
 # every gate that needs it was the bulk of the suite's build time.
@@ -18,7 +22,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -42,7 +46,7 @@ run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -66,7 +70,7 @@ test-render: build
 
 TEST_EXP := build/wb_exp_test.exe
 test-exp: build $(LUA_OBJS)
-	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_OBJS) -o $(TEST_EXP) -lm
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/core/wb_prof.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_OBJS) -o $(TEST_EXP) -lm
 	./$(TEST_EXP)
 
 # test-lv: slerm-Lua -- the Wua submodule (~WuBu~/src/lv, github.com/waefrebeorn/Wua)
@@ -209,6 +213,12 @@ test-host: build $(LUA_OBJS)
 	  src/lua/wb_space_bind.c tests/wb_host_test.c \
 	  $(LUA_OBJS) -o $(TEST_HOST) -lm
 	./$(TEST_HOST)
+
+# test-prof: LP-01 stone 1 -- frame profiler (counters, zones, ring buffer)
+TEST_PROF := build/wb_prof_test.exe
+test-prof: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_prof.c tests/wb_prof_test.c -o $(TEST_PROF)
+	./$(TEST_PROF)
 
 clean:
 	rm -rf build

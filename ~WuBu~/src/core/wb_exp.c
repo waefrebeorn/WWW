@@ -9,6 +9,7 @@
 #include "wb_exp.h"
 #include "wb_ecs.h"
 #include "wb_script.h"
+#include "wb_prof.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <string.h>
@@ -81,9 +82,16 @@ int wb_exp_join(wb_exp *e, const char *player_id) {
 
 uint32_t wb_exp_step(wb_exp *e, float dt) {
     if (!e) return 0;
+    /* LP-01: each step is one profile frame. */
+    wb_prof *pr = wb_prof_default();
+    wb_prof_begin_frame(pr);
     /* gamemode update first (Lua mutates velocity), then C integrates */
-    wb_script_step(e->L, dt);
-    wb_physics_tick(e->world, dt);
+    WB_PROF_ZONE(pr, "exp.script")  { wb_script_step(e->L, dt); }
+    WB_PROF_ZONE(pr, "exp.physics") { wb_physics_tick(e->world, dt); }
     e->tick++;
-    return wb_entity_count(e->world);
+    double *ent = wb_prof_counter(pr, "exp.entities");
+    uint32_t n = wb_entity_count(e->world);
+    if (ent) *ent = (double)n;
+    wb_prof_end_frame(pr);
+    return n;
 }
