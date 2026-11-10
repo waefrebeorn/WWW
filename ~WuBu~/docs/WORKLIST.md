@@ -168,7 +168,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 |---|---|---|---|---|---|
 | LP-46 | Build, cook & deploy pipeline | L | LP-36 | [468] | **PARTIAL** (cook manifest: build order + output hashes + chain shipped) |
 | LP-50 | Persistence layer | XL | LP-33 | [478] | **PARTIAL** (snapshot + tail event log shipped) |
-| LP-51 | Identity & social graph | L | LP-33 | [478] | TODO |
+| LP-51 | Identity & social graph | L | LP-33 | [478] | **PARTIAL** (friends/blocks/trust-rank graph shipped) |
 | LP-52 | Discovery & curation | L | LP-50 | [pass 1] | TODO |
 | LP-53 | Content moderation & safety | XL | LP-50 | [pass 1] | TODO |
 | LP-54 | Age gating & legal posture | L | LP-50 | [472] | TODO |
