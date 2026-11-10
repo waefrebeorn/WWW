@@ -176,7 +176,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-56 | Interoperability & federation | XL | LP-50 | [pass 1] | TODO |
 | LP-57 | AI-generated content & validation | XL | LP-78 | [pass 1] | TODO |
 | LP-58 | Platform live ops | L | LP-50 | [475] | **PARTIAL** (console variable registry shipped) |
-| LP-59 | Accessibility & localization | L | LP-42 | [pass 1] | TODO |
+| LP-59 | Accessibility & localization | L | LP-42 | [pass 1] | **PARTIAL** (string tables + fallback chain shipped) |
 | LP-80 | Multi-tenant tenancy & per-gametype isolation | L | LP-33 | [467][468][497] | TODO |
 | LP-81 | Service-to-service security / rate limiting | L | LP-50 | [470] | TODO |
 | LP-82 | Offline / edge caching & global distribution | M | LP-46 | [471] | TODO |
