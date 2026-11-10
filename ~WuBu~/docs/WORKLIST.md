@@ -79,7 +79,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-12 | Material system | L | LP-11 | [401] | TODO |
 | LP-13 | Texture streaming & GPU-compressed textures | L | LP-09 | [532] | TODO |
 | LP-14 | Occlusion culling | M | LP-16 | [522] | TODO |
-| LP-15 | LOD & HLOD | L | LP-10 | [523] | **PARTIAL** (LOD selection with hysteresis shipped; HLOD next) |
+| LP-15 | LOD & HLOD | L | LP-10 | [523] | **SHIPPED** (LOD selection with hysteresis + HLOD clustering) |
 | LP-16 | GPU-driven rendering | XL | LP-06, LP-11, LP-14 | [42] | TODO |
 | LP-17 | Mesh shaders & virtualized geometry | XL | LP-16, LP-10 | [401] | TODO |
 | LP-18 | Temporal upscaling | M | LP-12 | [40] | TODO |
