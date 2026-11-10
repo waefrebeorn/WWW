@@ -27,7 +27,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c src/core/wb_tagheap.c src/core/wb_budget.c src/core/wb_geom.c src/core/wb_meshlet.c src/core/wb_lod.c src/core/wb_hlod.c src/core/wb_galloc.c src/core/wb_occl.c src/core/wb_bindless.c src/core/wb_stream.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c src/core/wb_tagheap.c src/core/wb_budget.c src/core/wb_geom.c src/core/wb_meshlet.c src/core/wb_lod.c src/core/wb_hlod.c src/core/wb_galloc.c src/core/wb_occl.c src/core/wb_bindless.c src/core/wb_stream.c src/core/wb_material.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -50,7 +50,7 @@ run: $(TARGET)
 run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -360,6 +360,12 @@ TEST_STREAM := build/wb_stream_test.exe
 test-stream: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_stream.c tests/wb_stream_test.c -o $(TEST_STREAM)
 	./$(TEST_STREAM)
+
+# test-material: LP-12 stone 1 -- material draw sorting
+TEST_MATERIAL := build/wb_material_test.exe
+test-material: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_material.c tests/wb_material_test.c -o $(TEST_MATERIAL)
+	./$(TEST_MATERIAL)
 
 clean:
 	rm -rf build
