@@ -1,7 +1,7 @@
 # Slices 9–22 — kernel → meta engine → the gametype host
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
-The hop-by-hop backlog — 59 pads in dependency order, each with its sources —
+The hop-by-hop backlog — 86 pads in dependency order, each with its sources —
 is `docs/LILYPADS.md`.
 Each slice ships real, tested code; nothing is marked done without a green gate.
 

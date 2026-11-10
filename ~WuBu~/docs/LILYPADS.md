@@ -418,6 +418,163 @@ Platform certification increasingly requires these. *[398][204][339]*
 
 ---
 
+## Best source per pad (third-degree pass)
+
+Each existing pad pinned to the single best authoritative source (talk+speaker+year, canonical doc, or reference project). Full reasoning and citations live in the research reports `11..15-*.md`; the ledger holds every URL.
+
+**RENDER**
+- LP-09 GPU memory — [532] *Practical DirectX 12* (GDC 2016)
+- LP-11 bindless — [88] Our Machinery, *Moving The Machinery to Bindless*
+- LP-12 materials — [401] *Nanite GPU-Driven Materials* (GDC 2024)
+- LP-13 texture streaming — [532] *Practical DirectX 12* (residency)
+- LP-14 occlusion culling — [522] *Masked Software Occlusion Culling* (Intel)
+- LP-15 LOD/HLOD — [523] UIUC CS418 *Nanite: Streaming, LOD, Occlusion*
+- LP-16 GPU-driven — [42] *Nanite* SIGGRAPH 2021 Advances (Karis/Stubbe/Wihlidal)
+- LP-17 mesh shaders / visibility buffer — [401] *Nanite GPU-Driven Materials*
+- LP-18 temporal upscaling — [40] *Temporal Upscaling Past, Present, Future* (GDC 2023)
+- LP-19 GPU particles — [208] *Beyond Emitters* (GDC)
+- LP-20 real-time GI — [531] *Lumen in Fortnite Ch.4*; [529] *Lumen Technical Details*
+- LP-21 shader deps — enhanced-barrier work [524][527]
+
+**ANIMATE + CONNECT**
+- LP-22 blending/ASM/IK — [71] Therriault, *The Character of Watch_Dogs* (GDC 2015); IK [72]
+- LP-23 retargeting — [504] Gleicher, *Retargetting Motion to New Characters* (SIGGRAPH 1998)
+- LP-24 navmesh — [502][503] Recast/Detour (Mononen)
+- LP-27 locomotion — [500] Clavet, *Motion Matching* (GDC 2016)
+- LP-28 delta compression — [512] Fiedler, *Snapshot Compression*
+- LP-29 snapshot interpolation — [505] Fiedler, *Snapshot Interpolation*
+- LP-30 lag compensation — [506] Bernier, *Latency Compensating Methods* (GDC 2001)
+- LP-31 rollback — [148] GGPO Developer Guide; [66] *8 Frames in 16ms* (GDC 2015)
+- LP-32 net debugging — [509] Unreal *Networking Insights*
+- LP-33 meshing control plane — [508] Cloud Imperium, *Server Meshing Q&A*
+- LP-34 matchmaking — [510] *TrueSkill* (NIPS 2006)
+- LP-35 anti-cheat — [425] GameSafe iOS attestation; [516] Riot *Fog of War*
+
+**AUTHOR**
+- LP-36 asset graph — [481] Unity, *The new Asset Import Pipeline* (2019)
+- LP-37 import-time shaders — [96] Aras, *Unity's Shader Pipeline* (2013)
+- LP-38 shader graphs — [232] Unreal *Material Editor*; [274] *Shader Permutations*
+- LP-39 visual scripting — [233] Unreal *Blueprint Overview*
+- LP-40 cinematics — [482] Unreal *Cinematics and Movie Making*
+- LP-41 VFX — [213] *Niagara*; [208] *Beyond Emitters*
+- LP-42 UI system — [189] Godot *UI*; [198] *UIPainter* (GDC 2024)
+- LP-43 terrain — [202][289] *Terrain Rendering in Far Cry 5* (GDC)
+- LP-44 DCC tools — [485] *Project Skyline* (GDC 2011); [484] Unreal *Live Link*
+- LP-45 designer data tooling — [486] Unreal *Data Driven Gameplay Elements*
+- LP-49 certification — see the platform pass (10-meta-platform.md)
+
+**HOST / PLATFORM**
+- LP-46 build/cook/deploy — [468] Agones *Best Practices*
+- LP-50 persistence — [478] Epic Online Services *Player & Game Data*
+- LP-51 identity/social — [478] EOS *Overview*
+- LP-52 discovery — Roblox *Optimizing Discovery* (retained)
+- LP-53 moderation — Roblox *AI to Moderate Content* (retained)
+- LP-54 age gating/legal — [472] AEPD, *Data protection in video games* (2026)
+- LP-55 creator economy — [477] Roblox, *Vision for the Roblox Economy*
+- LP-56 interoperability — OMI glTF / MSF (retained)
+- LP-57 AI content — Roblox *Games with Generative AI* (retained)
+- LP-58 live ops — [475] PlayFab *data & analytics*
+- LP-59 accessibility — Microsoft GDK a11y (retained)
+
+**INSTRUMENT + SIMULATE** — pending the follow-up pass (`11-instrument-simulate.md`).
+
+---
+
+## Wave 7 — third-degree additions
+
+New gaps the first two passes never named, each grounded in a primary source. Same dependency logic: a pad is one crossable deliverable with a gate.
+
+### RENDER
+
+### LP-60 — GPU synchronization & resource-state/barrier management
+The single hardest explicit-API concern, unnamed until now: implicit promotion/decay, layout transitions, cache flushes, aliasing. Transition-to-COMMON is always a pipeline stall; enhanced barriers untangle work-sync / layout / cache-flush into independent types and drop implicit promotion. Godot's render-DAG + topological sort is the existence proof for automatic barrier insertion. WWW's single-queue, fixed-4-SRV backend inherits this the moment it adds aliasing, residency, async compute, or streaming. *[525][527][524][518]* · **Size L** · Prerequisite for LP-09/LP-16 residency and async.
+
+### LP-61 — HDR / color management / tone mapping
+The pipeline has no working color space. scRGB as the composition space, PQ/ST.2084, app-side tone mapping with MaxCLL; import decode to linear, light/composite scene-linear, then tone-map and re-encode. Cheap to decide now, painful to retrofit once bloom/fog/SSR land. *[521]* · **Size M**
+
+### LP-62 — Virtual texturing as a residency/feedback system
+Beyond per-mip streaming: one virtual address space, a page table, a feedback pass producing per-pixel page+mip requests, a CPU page manager (LRU + pinned low-res), coarse-mip-first fill. A natural fit for WWW's quadkey streaming tile store — Megatexture was exactly virtual texels over a big world. *[526][520][537]* · **Size L**
+
+### LP-63 — Reflection-tier design (SSR → RT → hybrid)
+No reflection path exists. DOOM Eternal puts SSR in the forward pass (single ray, ignore BRDF, TAA denoise); Lumen traces glossy rays at half-res and falls back to SSR for mirrors. Plan a tier (screen-visible SSR, off-screen RT fill), don't bolt on one technique. *[536][531][529]* · **Size M**
+
+### LP-64 — Multithreaded draw submission
+The render graph is recorded single-threaded. Task-graph: one render thread submits, workers build command lists; 15–30 CLs / 5–10 `ExecuteCommandLists` per frame; ≥200–500 µs GPU work per submit; PSOs compiled on workers; small root-signature table. Scales everything in Wave 2. *[532][534][518]* · **Size L**
+
+### LP-65 — Multi-GPU / multi-adapter RHI awareness
+No multi-GPU story. D3D12 nodes, cross-adapter heaps/fences, node masks; cross-adapter memory on the primary adapter; PCIe bandwidth caps 4K-HDR transfer. Design an abstraction (second adapter for async compute / display), not a split-screen code path. *[528][532]* · **Size L**
+
+### ANIMATE + CONNECT
+
+### LP-66 — Animation compression (ACL)
+WWW stores full-resolution glTF clips verbatim. ACL (Nicholas Frechette) is the reference: bit-aligned values instead of naturally aligned integers, every sample retained (no key reduction), uniform memory, cache-friendly sampling — decompression speed and memory directly bound how many characters a C11 engine can drive. Compress at import into the DDC; sample the compressed format at runtime. *[498][499][82]* · **Size L**
+
+### LP-67 — Motion matching / data-driven animation
+No mechanism to select frames from a clip database at runtime. Motion matching (Clavet, GDC 2016) continuously searches a mocap database for the frame matching current pose + desired future trajectory and blends to it, eliminating hand-authored transitions. For WWW: a pose/trajectory feature vector, a search (kd-tree / PCA-whitened features), inertialized blending. Feeds from LP-66. *[500]* · **Size L**
+
+### LP-68 — Crowd / SIMD / GPU-batched skinning
+One skeleton per character, no batch path — large crowds (the engine's whole demo) are unreachable. GPU Gems 3 ch.2 bakes all animation frames into a texture read in the vertex shader with `SV_InstanceID` (~10k characters at 30 fps on 2007 hardware); the CPU tier is SIMD batch skinning; DetourCrowd is the steering companion. *[501][502]* · **Size L**
+
+### LP-69 — Physics-blended & procedural animation
+No ragdoll/blend-to-physics path or secondary motion. State of the art is Clavet's ragdoll motion matching (GDC 2022); the near-term subset is active-ragdoll blend-in/out (a 0.1–0.3 s physics-weight ramp to avoid the pop). Needs a physics pose readback + blend-weight channel in the pose stage. *[514]* · **Size M**
+
+### LP-70 — Transport & reliability layer (reliable-UDP, encryption)
+Raw sockets, no reliability/sequencing. The three-message-class model: unreliable/latest-wins (movement), reliable/ordered (events), reliable-by-redundancy (inputs). Compare ENet, KCP, Valve GameNetworkingSockets (Curve25519 + AES-GCM-256, NAT traversal), QUIC, WebTransport. The encrypted channel also serves LP-35. *[507]* · **Size L**
+
+### LP-71 — Interest management beyond the quadkey (variable AOI, priority, visibility)
+The quadkey is a fixed-geometry culler; the literature names its failure mode — fixed AOI breaks under player clustering ("flash mobs"). Fix: variable-radius AOI (K-nearest) via the spatial store, priority-based relevancy (a per-object priority accumulator), and information-exposure control (withhold what a client cannot see — the anti-wallhack boundary). *[511][507][516]* · **Size L**
+
+### LP-72 — Headless dedicated-server simulation & netcode QoS telemetry
+The mesh is the partitioning story; nothing runs authoritative simulation headless at scale with the telemetry to operate it. Measure tick-duration p99, per-tick entity counts, packet queues, bandwidth-per-player; network-emulation + replay tooling. The netcode analogue of LP-01; LP-33 autoscaling and LP-32 tooling share this substrate. *[517][515][509]* · **Size L**
+
+### AUTHOR
+
+### LP-73 — Sandboxed hot-reload reliability / live-edit loop
+Hot-reload has no guarantees: no syntax gate before swap, no `on_reload` lifecycle, no defined boundary between reloadable (code, UI) and non-reloadable (physics bodies, sockets, engine state). Defold's hot-reload manual is the discipline reference; a reliable live-edit loop is a hard requirement for a gametype-first engine. *[488]* · **Size M**
+
+### LP-74 — Editor undo / transaction / command system
+Operation replay exists but no transaction system: no command objects with inverse ops, no memento for non-invertible ops, no history bound, no idempotency. Command pattern + memento, baked in now; the production pattern for multi-step/agent edits is a plan + effect journal with compensating actions and idempotency keys. *[491][489]* · **Size L**
+
+### LP-75 — Importer-versioned DAG asset builds + build-key correctness
+The DDC key is source content only, so an importer change serves stale blobs. Every transform is a pure node versioned by a function hash; build key = hash(source, settings, importer version); incremental DAG rebuild; determinism (same bytes from every toolchain, or a toolchain term in the key). *[481][490]* · **Size L**
+
+### LP-76 — Cloud / dedicated build farms
+The asset pipeline is single-process; no way to parallelize C++/shader compile or cooking across machines. Reference: Horde + Unreal Build Accelerator (agent pool, artifact store, remote execution, auto-scaling). A creator's cook of a large world must not block their machine. *[487]* · **Size L**
+
+### LP-77 — Multi-user co-authoring / co-located editing
+The editor is single-user. Reference: Unreal Multi-User Editing — client-server transaction bus, instant level sync, asset sync on save with hot-reload, presence, optimistic locking, undo/redo integrated with source control. The world-data model must be transaction-granular. *[483]* · **Size XL**
+
+### LP-78 — Asset validation / lint pipeline
+glTF/VRM import has no validator gate or lint rules. Rules-based validation with machine-readable diagnostics (asset id, rule, severity, suggested fix) consumed identically by editors and agents; geometry/material/rig checks committed as tests. Khronos' glTF validator is the binary gate; `assetpipe` shows the standalone form. *[490][492]* · **Size L**
+
+### LP-79 — Asset provenance & licensing
+No record of where an asset came from, who holds rights, or which license governs it — a real liability when creators and AI tools both inject content. Provenance+license as a required field; the build refuses unlicensed assets; an SPDX allowlist gate; automated credits; track model-id/prompt-hash/seed so a generated asset can be audited later. *[490][492][493]* · **Size L**
+
+### HOST / PLATFORM
+
+### LP-80 — Multi-tenant tenancy & per-gametype isolation
+Many gametypes co-host on a shared fleet with no tenancy model: no per-gametype control-plane isolation, no resource quotas, no blast-radius containment. Reference: vCluster + KAI Scheduler per-team control planes with no lateral path; Agones Pod Security Standards; Red Hat's isolation stack (MIG vs time-slice). *[467][468][497]* · **Size L**
+
+### LP-81 — Service-to-service security / rate limiting / abuse defense
+Platform APIs (matchmaking, discovery, economy, moderation) have no request-defense layer. Reference: Cloudflare Rate Limiting — edge blocking before origin, limits keyed on headers/session, botnet neutralization, login brute-force protection; Cloudflare for Gaming adds DDoS/WAF/API security. *[470]* · **Size L**
+
+### LP-82 — Offline / edge caching & global distribution
+Nothing tiers content to the edge; every asset request hits origin. Reference: Cloudflare Tiered Cache (lower + upper tiers, origin reaped on miss, topology choices). Needed for gametype bundles, UI assets, and glTF/VRM content. *[471]* · **Size M**
+
+### LP-83 — Data portability / GDPR / privacy posture (export + erasure)
+The platform holds identity, social graph, inventory, telemetry with no export/erasure/portability. AEPD's June 2026 guidance: Art. 20 portability ("export my data" buttons with previews), short raw-log retention, processor coordination; EDPB requires simple, accessible, free erasure. Non-compliant by default under EU law. *[472][495][475]* · **Size L**
+
+### LP-84 — Availability / SLO engineering & on-call for the platform itself
+No SLI/SLO, error budget, burn-rate alerting, or on-call for the host layer. Google SRE: error budget = 1 − SLO; multi-window multi-burn-rate alerts; budget policy halts changes on exhaustion and mandates postmortems. Per-service SLOs for discovery/identity/economy/asset-delivery. *[473][496]* · **Size L**
+
+### LP-85 — Real-money economies & in-game purchase compliance
+The backlog names creator payout but not the consumer-spend side. Regulators are escalating (NY AG loot-box suit, FTC dark-pattern positions, Belgium/Germany/EU rules, EU Digital Fairness Act). Ship consent/restriction, probability/loot-box disclosure, and regional gating or inherit gambling-law liability. *[480][494][472]* · **Size L**
+
+### LP-86 — Runtime plugin/module & avatar-item marketplace
+Discovery covers gametypes, but users can't obtain engine plugins, avatar items, or reusable content in a trusted, versioned way. Reference: Godot Asset Store (reviews, versions, changelogs, publisher analytics); Roblox avatar-items-as-content. Distinct from gametype discovery. *[476][477]* · **Size XL**
+
+---
+
 ## Accepted risk — not a pad
 
 **The mod sandbox is escapable, and that is accepted.** `sandbox_blocked()` is a
@@ -538,6 +695,7 @@ exists as a note, not as work.
 [176] https://en.help.roblox.com/hc/en-us/articles/115004647846-Roblox-Terms-of-Use — Roblox Terms of Use
 [179] https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa — FTC: Children's Online Privacy Protection Rule (COPPA)
 [181] https://github.com/harfbuzz/harfbuzz — HarfBuzz text shaping engine
+[189] https://docs.godotengine.org/en/stable/tutorials/ui/index.html — User interface (UI) - Godot Docs
 [191] https://docs.xbox.com/publishing/certification/console-cert-tested-requirements — Console Certification Tested Requirements
 [192] https://dev.epicgames.com/documentation/unreal-engine/packaging-and-cooking-games-in-unreal-engine — Packaging and Cooking Games in Unreal Engine
 [193] https://dev.epicgames.com/documentation/unreal-engine/cooking-and-chunking — Cooking and Chunking (Unreal docs)
@@ -546,18 +704,23 @@ exists as a note, not as work.
 [198] https://gdcvault.com/play/1036033 — Cutscene Pipeline in 'Love and Deepspace' (GDC Vault)
 [202] https://www.gdcvault.com/play/1025261 — Terrain Rendering in 'Far Cry 5' (GDC Vault)
 [204] https://gdcvault.com/play/1012510/Standardizing-the-Localization — Standardizing the Localization Process (GDC Vault)
+[208] https://www.gdcvault.com/play/1028009/Technical-Artist-Summit-Bringing-the — Technical Artist Summit: Bringing the World to Your Shaders
 [213] https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-visual-effects-in-niagara-for-unreal-engine — Creating Visual Effects in Niagara (Unreal docs)
 [218] https://metaverse-standards.org/domain-groups/interoperable-characters-avatars — MSF: Interoperable Characters/Avatars Working Group
 [220] https://docs.xbox.com/services/playfab/live-service-management/game-configuration/experiments/experimentation-keys — PlayFab: Experiments (A/B testing) keys
 [221] https://create.roblox.com/docs/projects/version-history — Roblox Creator Docs: Version History
+[232] https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-material-editor-user-guide — Unreal Engine Material Editor User Guide
+[233] https://dev.epicgames.com/documentation/en-us/unreal-engine/blueprint-overview — Blueprint Overview (Unreal docs)
 [239] https://www.ftc.gov/news-events/news/press-releases/2026/02/ftc-issues-coppa-policy-statement-incentivize-use-age-verification-technologies-protect-children — FTC: COPPA Policy Statement on age verification technologies (Feb 2026)
 [253] https://ruby0x1.github.io/machinery_blog_archive/post/the-machinery-network-frontier-part-1/index.html — The (Machinery) Network Frontier -- Part 1
 [255] https://ruby0x1.github.io/machinery_blog_archive/post/writing-a-low-level-sound-system/index.html — Writing a Low-Level Sound System -- You Can Do It!
 [257] https://ruby0x1.github.io/machinery_blog_archive/post/keyboard-focus-and-event-trickling-in-immediate-mode-guis/index.html — Keyboard Focus and Event Trickling in Immediate Mode GUIs
 [263] https://fgiesen.wordpress.com/2026/08/25/memory-ordering-in-cpus — Memory ordering in CPUs (ryg blog)
 [267] https://github.com/cloverwoodstudio/codex-game-dev-library/blob/main/guides/systems/replays-determinism.md — Replays and Determinism (codex-game-dev-library)
+[274] https://dev.epicgames.com/community/learning/knowledge-base/6PxP/unreal-engine-understanding-shader-permutations — Understanding Shader Permutations (Unreal)
 [283] https://www.gdcvault.com/play/1021826/Automated-Testing-and-Instant-Replays — Automated Testing and Instant Replays in Retro City Rampage (GDC Vault)
 [284] https://www.gdcvault.com/play/1029379/Tools-Summit-TestMonkey-Automated-Testing — Tools Summit: TestMonkey: Automated Testing at Santa Monica Studio
+[289] https://www.gdcvault.com/play/1025261/Terrain-Rendering-in-Far-Cry — Terrain Rendering in 'Far Cry 5' (GDC Vault)
 [290] https://www.gdcvault.com/play/1034449/UIPainter-Tile-Based-UI-Rendering — UIPainter: Tile-Based UI Rendering in One Draw Call (GDC Vault)
 [298] https://wickedengine.net/category/devblog/2022/09/23/animation-retargeting/index.html — Animation Retargeting (Wicked Engine)
 [300] https://wickedengine.net/category/devblog/2022/04/23/shader-compiler-tools/index.html — Shader compiler tools (Wicked Engine)
@@ -577,8 +740,73 @@ exists as a note, not as work.
 [383] http://www.gdcvault.com/play/1027463/x — Advanced Graphics Summit: Boots on the Ground: The Terrain of 'Call of Duty'
 [393] http://www.gdcvault.com/play/1029149/x — Google Developer Summit: Google Play Games on PC: Pass Certification in 30 Minutes (Presen
 [398] http://www.gdcvault.com/play/1034186/x — Design with Localization in Mind: Approaches to Translation Damage Control
+[401] http://www.gdcvault.com/play/1034228/x — Nanite GPU-Driven Materials
 [402] http://www.gdcvault.com/play/1034365/x — Scaling Git Workflows for Game Development
 [403] http://www.gdcvault.com/play/1034436/x — How LiveOps Allows Games to be Played as Intended, Always
 [404] http://www.gdcvault.com/play/1034449/x — UIPainter: Tile-Based UI Rendering in One Draw Call
 [413] http://www.gdcvault.com/play/1036045/x — Trust, Attest, Server-Authoritative: Modern iOS Anti-Cheat for Multiplayer (Presented by G
 [414] https://ruby0x1.github.io/machinery_blog_archive/post/the-machinery-shader-system-part-3 — The Machinery Shader System (part 3)
+[425] https://www.gdcvault.com/play/1036045/Trust-Attest-Server-Authoritative-Modern — Trust, Attest, Server-Authoritative: Modern iOS Anti-Cheat (GDC 2026)
+[467] https://developer.nvidia.com/blog/how-to-run-isolated-tenant-kubernetes-clusters-on-shared-gpu-infrastructure — NVIDIA: Isolated tenant K8s clusters on shared GPU infrastructure
+[468] https://agones.dev/site/docs/guides/best-practices — Agones Best Practices
+[470] https://www.cloudflare.com/products/rate-limiting — Cloudflare Rate Limiting - API Abuse Prevention
+[471] https://developers.cloudflare.com/cache/how-to/tiered-cache — Cloudflare Tiered Cache docs
+[472] https://www.aepd.es/en/guides/videogames-recommendations-industry.pdf — AEPD: Recommendations and best practices for data protection in video games
+[473] https://sre.google/workbook/alerting-on-slos — Google SRE Workbook - Alerting on SLOs
+[475] https://docs.xbox.com/services/playfab/data-analytics/index — PlayFab data and analytics docs
+[476] https://godotengine.org/article/introducing-the-godot-asset-store — Godot Asset Store intro
+[477] https://about.roblox.com/newsroom/2023/07/vision-roblox-economy — Our Vision for the Roblox Economy
+[478] https://dev.epicgames.com/docs/epic-online-services/eos-overview — Epic Online Services (EOS) Overview
+[480] https://www.fenwick.com/insights/publications/mechanics-under-attack-traditional-video-game-mechanics-face-renewed-scrutiny — Fenwick - Video game mechanics renewed scrutiny
+[481] https://unity.com/blog/engine-platform/new-asset-import-pipeline-for-speeding-up-asset-imports — Unity: The new Asset Import Pipeline - dependency-tracked, artifact-revision-hashed asset builds
+[482] https://dev.epicgames.com/documentation/unreal-engine/cinematics-and-movie-making-in-unreal-engine?lang=en-US — Unreal Engine Cinematics and Movie Making (Sequencer)
+[483] https://dev.epicgames.com/documentation/unreal-engine/multi-user-editing-overview-for-unreal-engine — Unreal Engine Multi-User Editing Overview
+[484] https://dev.epicgames.com/documentation/unreal-engine/live-link-in-unreal-engine?lang=en-US — Unreal Engine Live Link - DCC to engine live streaming
+[485] https://www.cgchannel.com/wp-content/uploads/2011/03/project_skyline_overview.pdf — Project Skyline: Games Technology for a Modern Pipeline (live-linked authored+runtime data)
+[486] https://dev.epicgames.com/documentation/en-us/unreal-engine/data-driven-gameplay-elements-in-unreal-engine — Unreal Engine: Data Driven Gameplay Elements (DataTables/DataAssets)
+[487] https://dev.epicgames.com/documentation/en-us/unreal-engine/horde-in-unreal-engine — Horde in Unreal Engine (distributed build system + UBA)
+[488] https://defold.com/manuals/hot-reload — Defold manual: Hot reloading resources
+[489] https://www.strayspark.studio/blog/undo-ai-agent-changes-unreal-effect-journal-rollback — Ctrl-Z Is Not a Rollback Strategy: Undoing (Unreal transaction buffer)
+[490] https://github.com/marcmicalizzi/game_engine/blob/main/docs/plan/07-content-pipeline.md — Asset and Content Pipeline: DAG derived-data graph, provenance, license allowlist (marcmicalizzi/game_engine)
+[491] https://www.socratopia.app/library/game-code-anatomy-en/chapter-25 — Reversible Commands and the Ctrl-Z Move in Game Editors (command pattern)
+[492] https://crates.io/crates/assetpipe — assetpipe: asset provenance, dependency graphs, validation, credits
+[493] https://fyrosgamesstudio.com/industry/generative-ai-game-art-copyright — Generative AI Game Assets: Rights, Consistency and Risk
+[494] https://www.gamesindustry.biz/loot-box-state-of-play-2024-another-trip-around-the-world-of-regulation — GamesIndustry.biz: Loot Box State of Play 2024 regulation survey
+[495] https://www.edpb.europa.eu/sme/be-compliant/respect-individuals-rights_en — EDPB: Respect individuals rights \(erasure\)
+[496] https://sre.google/workbook/error-budget-policy — Google SRE Workbook: Error Budget Policy
+[497] https://www.redhat.com/en/blog/designing-multitenant-gpu-infrastructure-isolation-across-virtualization-and-kubernetes-platforms — Red Hat: Designing multitenant GPU infrastructure isolation
+[498] https://github.com/nfrechette/acl — ACL Animation Compression Library (Nicholas Frechette)
+[499] https://nfrechette.github.io/2018/07/21/acl_v1.0.0 — ACL v1.0 release: bit-aligned animation compression (Frechette blog)
+[500] https://www.gdcvault.com/play/1023280/Motion-Matching-and-The-Road — GDC 2016 Motion Matching and The Road to Next-Gen Animation (Simon Clavet, Ubisoft)
+[501] https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-2-animated-crowd-rendering — GPU Gems 3 Ch2: Animated Crowd Rendering (instanced skinned characters)
+[502] https://recastnav.com — Recast Navigation: navmesh generation + Detour (Mikko Mononen)
+[503] https://github.com/recastnavigation/recastnavigation — recastnavigation: Recast/Detour source (Mikko Mononen)
+[504] https://graphics.cs.wisc.edu/Papers/1998/Gle98 — Retargetting Motion to New Characters (Michael Gleicher, SIGGRAPH 1998)
+[505] https://www.gafferongames.com/post/snapshot_interpolation — Gaffer On Games: Snapshot Interpolation (Glenn Fiedler, Networked Physics)
+[506] https://developer.valvesoftware.com/wiki/Latency_Compensating_Methods_in_Client/Server_In-game_Protocol_Design_and_Optimization — Valve: Latency Compensating Methods in Client/Server In-game Protocol (Yahn Bernier, GDC 2001)
+[507] https://www.syntaqx.com/books/gaming/netcode — Netcode Fundamentals (syntaqx): UDP reliability, transport options ENet/KCP/QUIC/WebTransport
+[508] https://star-citizen.wiki/Comm-Link:18397/en — Star Citizen: Server Meshing and Persistent Streaming Q&A (Replication Layer)
+[509] https://dev.epicgames.com/community/learning/knowledge-base/kjm3/testing-profiling-and-debugging-unreal-engine-s-networking — Unreal: Testing, Profiling, and Debugging Networking (Networking Insights, lag/loss emulation)
+[510] https://papers.nips.cc/paper_files/paper/2006/hash/f44ee263952e65b3610b8ba51229d1f9-Abstract.html — TrueSkill: A Bayesian Skill Rating System (Herbrich, Minka, Graepel, NIPS 2006)
+[511] https://www.ee.ucl.ac.uk/lcs/previous/LCS2011/LCS1121.pdf — Spatial Interest Management in Networked Games (Anvari & Rio, UCL 2011)
+[512] https://www.gafferongames.com/post/snapshot_compression — Gaffer On Games: Snapshot Compression (Glenn Fiedler, Networked Physics)
+[514] https://www.gdcvault.com/play/1026712/Ragdoll-Motion-Matching — GDC 2022 Machine Learning Summit: Ragdoll Motion Matching (Simon Clavet, Ubisoft)
+[515] https://www.riotgames.com/en/news/peeking-valorants-netcode — Riot: Peeking into VALORANT's Netcode (server-authoritative, buffering, tick)
+[516] https://www.riotgames.com/en/news/demolishing-wallhacks-valorants-fog-war — Riot: Demolishing Wallhacks with VALORANT's Fog of War (interest/visibility)
+[517] https://www.syntaqx.com/books/gaming/game-servers — Game Servers & Hosting (syntaqx): dedicated fleets, scaling, QoS
+[518] https://godotengine.org/article/rendering-acyclic-graph — GPU sync in Godot 4.3: rendering acyclic graph (Banini)
+[520] https://tonisagrista.com/blog/2023/sparse-virtual-textures — Sparse Virtual Textures (Toni Sagrista Gaia Sky)
+[521] http://learn.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range — Use DirectX with Advanced Color (Microsoft Learn)
+[522] https://www.intel.com/content/www/us/en/developer/articles/technical/masked-software-occlusion-culling.html — Masked Software Occlusion Culling (Intel)
+[523] https://courses.grainger.illinois.edu/CS418/sp2023/text/nanite.html — Nanite Streaming LOD Occlusion (UIUC CS418)
+[524] https://microsoft.github.io/DirectX-Specs/d3d/D3D12EnhancedBarriers.html — Enhanced Barriers spec (DirectX-Specs)
+[525] https://devblogs.microsoft.com/directx/a-look-inside-d3d12-resource-state-barriers — A Look Inside D3D12 Resource State Barriers (DirectX Dev Blog)
+[526] https://www.shlom.dev/articles/how-virtual-textures-really-work — How Virtual Textures Really Work (shlom.dev)
+[527] https://devblogs.microsoft.com/directx/d3d12-enhanced-barriers-preview — D3D12 Enhanced Barriers Preview (DirectX Dev Blog)
+[528] https://learn.microsoft.com/en-us/windows/win32/direct3d12/multi-engine — Multiple Direct3D 12 engines/multi-adapter (MS Learn)
+[529] https://docs.unrealengine.com/en-US/RenderingAndGraphics/GlobalIllumination/index.html — Lumen Technical Details (Unreal docs)
+[531] https://www.unrealengine.com/tech-blog/lumen-brings-real-time-global-illumination-to-fortnite-battle-royale-chapter-4 — Lumen in Fortnite BR Chapter 4 (Epic tech blog)
+[532] https://gpuopen.com/download/Practical_DX12_Programming_Model_and_Hardware_Capabilities.pdf — Practical DirectX 12: Programming Model and Hardware Capabilities (GDC 2016)
+[534] https://gpuopen.com/download/GDC_2016_D3D12_Right_On_Queue_final.pdf — Right on Queue: Advanced DirectX 12 Programming (GDC 2016)
+[536] https://www.simoncoenen.com/blog/programming/graphics/DoomEternalStudy.html — DOOM Eternal Graphics Study (Simon Coenen)
+[537] https://en.wikipedia.org/wiki/Clipmap — Clipmap - Wikipedia (Megatexture)
