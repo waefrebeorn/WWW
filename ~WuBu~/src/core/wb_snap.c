@@ -77,6 +77,16 @@ int      wb_snap_equal(const wb_snap *a, const wb_snap *b) {
 }
 size_t   wb_snap_bytes(const wb_snap *s) { return s ? s->len : 0; }
 
+int wb_snap_first_diff(const wb_snap *a, const wb_snap *b, size_t *out_off) {
+    if (!a || !b) return 0;
+    size_t n = a->len < b->len ? a->len : b->len;
+    for (size_t i = 0; i < n; i++) {
+        if (a->bytes[i] != b->bytes[i]) { if (out_off) *out_off = i; return 1; }
+    }
+    if (a->len != b->len) { if (out_off) *out_off = n; return 1; }  /* prefix equal, length differs */
+    return 0;
+}
+
 uint64_t wb_snap_digest_world(wb_world *w, const wb_comp_type *types, int ntypes) {
     if (!w || !types || ntypes < 0) return 0;
     uint64_t h = WB_DET_FNV_OFFSET;

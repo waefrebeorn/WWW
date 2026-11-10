@@ -31,6 +31,11 @@ uint64_t wb_snap_digest(const wb_snap *s);
 int      wb_snap_equal(const wb_snap *a, const wb_snap *b);
 size_t   wb_snap_bytes(const wb_snap *s);   /* packed length */
 
+/* Triage (LP-87): byte offset of the first difference between two snapshots
+ * (0 if identical). Once a per-tick digest mismatches, this localizes the
+ * desync to a record inside the pack instead of just flagging it. */
+int      wb_snap_first_diff(const wb_snap *a, const wb_snap *b, size_t *out_off);
+
 /* Lightweight per-tick checksum: streams the same stable-ordered world state
  * through FNV-1a with no allocation. Identical to wb_snap_digest(capture()).
  * This is what a headless sim emits every tick to detect divergence. */

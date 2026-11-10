@@ -77,6 +77,14 @@ int main(void) {
     wb_snap *a3 = wb_snap_capture(wa, ta, 2);
     CHECK(!wb_snap_equal(a1, a3), "a single entity moved changes the digest");
 
+    /* LP-87: triage -- the first difference localizes the desync */
+    size_t off = 0;
+    CHECK(wb_snap_first_diff(a1, a2, &off) == 0, "identical snapshots have no first difference");
+    CHECK(wb_snap_first_diff(a1, a3, &off) == 1 && off > 0 && off < wb_snap_bytes(a1),
+          "a moved entity localizes to a byte offset inside the pack");
+    CHECK(wb_snap_first_diff(a1, a1, &off) == 0, "a snapshot equals itself");
+    CHECK(wb_snap_first_diff(NULL, a1, &off) == 0, "null snapshot is a safe no-op");
+
     /* a differently seeded sim diverges */
     build(99, &wa, ta);
     wb_snap *other = wb_snap_capture(wa, ta, 2);
