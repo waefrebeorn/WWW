@@ -46,7 +46,7 @@ run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -237,6 +237,12 @@ TEST_MATH := build/wb_math_test.exe
 test-math: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_math.c tests/wb_math_test.c -o $(TEST_MATH) -lm
 	./$(TEST_MATH)
+
+# test-fastmath: LP-08 seed -- folded sin/cos (slermed from wubuwizard foldmath)
+TEST_FASTMATH := build/wb_fastmath_test.exe
+test-fastmath: build
+	$(CC) $(CFLAGS) -Isrc/core -mavx2 -mfma tests/wb_fastmath_test.c -o $(TEST_FASTMATH) -lm
+	./$(TEST_FASTMATH)
 
 clean:
 	rm -rf build
