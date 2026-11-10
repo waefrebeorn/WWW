@@ -15,6 +15,21 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+/* Debug builds validate the hive after every mutation: a broken invariant is
+ * reported at the exact operation instead of surfacing later as a crash. */
+#ifdef WB_POOL_DEBUG
+#include <stdio.h>
+#define WB_POOL_CHECK_HIVE(p) do { \
+    int rc_ = wb_hive_validate(&(p)->jobs); \
+    if (rc_ != 0) { \
+        fprintf(stderr, "HIVE CORRUPT (%d) at %s:%d\n", rc_, __FILE__, __LINE__); \
+        abort(); \
+    } \
+} while (0)
+#else
+#define WB_POOL_CHECK_HIVE(p) ((void)0)
+#endif
+
 typedef struct wb_pool_job {
     wb_pool_fn     fn;      /* normal job */
     void          *user;
@@ -52,6 +67,7 @@ static void *wb_pool_worker(void *arg) {
         /* the hive is single-threaded: recycle the record under the pool lock */
         pthread_mutex_lock(&p->m);
         wb_hive_drop(&p->jobs, j);
+        WB_POOL_CHECK_HIVE(p);
         if (--p->pending == 0) pthread_cond_broadcast(&p->cv);
         pthread_mutex_unlock(&p->m);
     }
@@ -111,6 +127,7 @@ int wb_pool_submit(wb_pool *p, wb_pool_fn fn, void *user) {
     if (p->tail) p->tail->next = j; else p->head = j;
     p->tail = j;
     p->pending++;
+    WB_POOL_CHECK_HIVE(p);
     pthread_cond_signal(&p->cv);
     pthread_mutex_unlock(&p->m);
     return 0;

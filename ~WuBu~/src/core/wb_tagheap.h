@@ -59,4 +59,12 @@ size_t wb_tagheap_peak(const wb_tagheap *h, uint32_t tag);
 void   wb_tagheap_set_budget(wb_tagheap *h, uint32_t tag, size_t budget);
 int    wb_tagheap_over(const wb_tagheap *h, uint32_t tag);
 
+/* ---- per-thread heaps ---------------------------------------------------- *
+ * Each thread gets its own tag heap, so the common allocation path needs no
+ * lock at all (Naughty Dog: per-thread blocks make 99.9% of allocations
+ * lock-free). The heap is created lazily on first use on each thread. */
+wb_tagheap *wb_tagheap_thread(void);
+void *wb_tagheap_thread_alloc(uint32_t tag, size_t bytes, size_t align);
+void  wb_tagheap_thread_reset(uint32_t tag);
+
 #endif /* WB_TAGHEAP_H */

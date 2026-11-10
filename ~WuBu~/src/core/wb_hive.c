@@ -134,3 +134,29 @@ size_t wb_hive_foreach(wb_hive *h, int (*fn)(void *elem, void *user), void *user
 size_t wb_hive_live(const wb_hive *h) { return h ? h->total_live : 0; }
 size_t wb_hive_capacity(const wb_hive *h) { return h ? h->n_blocks * h->block_cap : 0; }
 int    wb_hive_empty(const wb_hive *h) { return !h || h->total_live == 0; }
+
+int wb_hive_validate(const wb_hive *h) {
+    if (!h) return 0;
+    size_t total = 0;
+    for (const wb_hive_block *b = h->head; b; b = b->next) {
+        size_t live = 0;
+        for (size_t s = 0; s < b->cap; s++) if (b->skip[s] == 0) live++;
+        if (live != b->live) return -1;
+        total += live;
+    }
+    if (total != h->total_live) return -2;
+    for (size_t i = 0; i < h->n_free; i++) {
+        const wb_hive_block *b = h->free_entries[i].block;
+        size_t s = h->free_entries[i].slot;
+        if (!b || s >= b->cap || b->skip[s] != 1) return -3;
+    }
+    /* the append path writes at index `live`; that is only safe when every
+     * slot below `live` is live, i.e. when no hole is outstanding. */
+    if (h->n_free == 0) {
+        for (const wb_hive_block *b = h->head; b; b = b->next) {
+            for (size_t s = 0; s < b->live; s++)
+                if (b->skip[s] != 0) return -4;
+        }
+    }
+    return 0;
+}

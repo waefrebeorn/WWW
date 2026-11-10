@@ -71,4 +71,13 @@ size_t wb_hive_live(const wb_hive *h);
 size_t wb_hive_capacity(const wb_hive *h);
 int    wb_hive_empty(const wb_hive *h);
 
+/* Validate every hive invariant. Returns 0 when consistent, or a negative code:
+ *   -1 a block's live count disagrees with its skipfield
+ *   -2 total_live disagrees with the sum of the block lives
+ *   -3 a freelist entry is out of range or points at a live slot
+ *   -4 a block's live slots are not contiguous at [0, live) while the
+ *      freelist is empty (the append path's precondition)
+ */
+int wb_hive_validate(const wb_hive *h);
+
 #endif /* WB_HIVE_H */

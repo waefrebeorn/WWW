@@ -1,7 +1,11 @@
 # WuBu Engine -- build
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
-LDLIBS  := -lm -lpthread
+LDLIBS  := -lm
+# Fully static link. This machine's Code Integrity policy blocks the shared
+# libwinpthread-1.dll, and the static libpthread.a still imports from it (via
+# emutls), so any gate using pthreads or _Thread_local must link statically.
+PTHREAD := -static
 # Pin make's command shell to the Git bash. Make auto-detects Hermes's
 # bundled sh.exe (WindowsApps, Smart App Control-blocked) and dies with
 # 'Access is denied' on the first gate. This is environmental, not code.
@@ -37,7 +41,7 @@ build:
 	mkdir -p build
 
 $(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS) $(WORLDSPACE_SRC)
-	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ $(LDLIBS) $(PTHREAD)
 
 run: $(TARGET)
 	./$(TARGET) games omniverse-hub
@@ -46,13 +50,12 @@ run: $(TARGET)
 run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
-# test: build each core module standalone (no Lua host/main) + run its harness
-# NOTE (environment): Windows Smart App Control intermittently blocks a freshly
-# linked test exe with "An Application Control policy has blocked this file"
-# (make e=4551). It is not a code failure. Workaround: delete the named exe and
-# re-run -- the next link usually passes. A full-suite run may need several
-# delete-and-retry rounds on a fresh checkout.
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap
+# NOTE (environment): this machine's Code Integrity policy blocks the shared
+# libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
+# (see PTHREAD above). If a gate ever fails with "An Application Control policy
+# has blocked this file" (make e=4551), check `objdump -p build/<gate>.exe |
+# grep libwinpthread` -- a hit means the static link was lost.
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -265,19 +268,19 @@ test-job: build
 # test-pool: LP-06 stone 2 -- the worker pool (deterministic parallel-for)
 TEST_POOL := build/wb_pool_test.exe
 test-pool: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_pool.c src/core/wb_hive.c tests/wb_pool_test.c -o $(TEST_POOL) $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_pool.c src/core/wb_hive.c tests/wb_pool_test.c -o $(TEST_POOL) $(PTHREAD) $(LDLIBS)
 	./$(TEST_POOL)
 
 # test-access: LP-07 stone 1 -- data-access validation (safe-point tracking)
 TEST_ACCESS := build/wb_access_test.exe
 test-access: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_access.c src/core/wb_pool.c src/core/wb_hive.c tests/wb_access_test.c -o $(TEST_ACCESS) $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_access.c src/core/wb_pool.c src/core/wb_hive.c tests/wb_access_test.c -o $(TEST_ACCESS) $(PTHREAD) $(LDLIBS)
 	./$(TEST_ACCESS)
 
 # test-atomic: LP-08 stone 2 -- memory ordering (release/acquire message passing)
 TEST_ATOMIC := build/wb_atomic_test.exe
 test-atomic: build
-	$(CC) $(CFLAGS) -Isrc/core tests/wb_atomic_test.c -o $(TEST_ATOMIC) $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/core tests/wb_atomic_test.c -o $(TEST_ATOMIC) $(PTHREAD) $(LDLIBS)
 	./$(TEST_ATOMIC)
 
 # test-frame: LP-02 stone 1 -- the frame allocator
@@ -295,8 +298,14 @@ test-hive: build
 # test-tagheap: LP-02 stone 3 -- tag-partitioned linear heap (hive block registry)
 TEST_TAGHEAP := build/wb_tagheap_test.exe
 test-tagheap: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c src/core/wb_tagheap.c tests/wb_tagheap_test.c -o $(TEST_TAGHEAP)
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c src/core/wb_tagheap.c tests/wb_tagheap_test.c -o $(TEST_TAGHEAP) $(PTHREAD) $(LDLIBS)
 	./$(TEST_TAGHEAP)
+
+# test-threadheap: LP-02 stone 4 -- per-thread tag heaps (lock-free common path)
+TEST_THREADHEAP := build/wb_threadheap_test.exe
+test-threadheap: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c src/core/wb_tagheap.c tests/wb_threadheap_test.c -o $(TEST_THREADHEAP) $(PTHREAD) $(LDLIBS)
+	./$(TEST_THREADHEAP)
 
 clean:
 	rm -rf build

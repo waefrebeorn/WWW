@@ -133,3 +133,62 @@ int wb_tagheap_over(const wb_tagheap *h, uint32_t tag) {
     for (int i = 0; i < h->ntags; i++) if (h->tags[i].tag == tag) return h->tags[i].over;
     return 0;
 }
+
+/* ---- per-thread heaps ---------------------------------------------------- */
+
+/* Windows native TLS (kernel32) rather than _Thread_local: this machine's Code
+ * Integrity policy blocks libwinpthread-1.dll, and the static libpthread.a
+ * still imports from it via emutls -- which also fails to give each
+ * pthread-created thread its own storage under a static link. Win32 TLS needs
+ * no such support. A per-thread heap is intentionally not freed at thread exit
+ * (Win32 TLS has no destructor); the process owns it. */
+#ifdef _WIN32
+#include <windows.h>
+
+static DWORD wb_tagheap_tls(void) {
+    static DWORD idx = TLS_OUT_OF_INDEXES;
+    static volatile LONG state = 0;          /* 0 = uninit, 1 = initing, 2 = done */
+    if (state == 2) return idx;
+    if (InterlockedCompareExchange(&state, 1, 0) == 0) {
+        idx = TlsAlloc();
+        state = 2;
+    } else {
+        while (state != 2) { }
+    }
+    return idx;
+}
+
+wb_tagheap *wb_tagheap_thread(void) {
+    DWORD idx = wb_tagheap_tls();
+    if (idx == TLS_OUT_OF_INDEXES) return NULL;
+    wb_tagheap *h = (wb_tagheap *)TlsGetValue(idx);
+    if (!h) {
+        h = (wb_tagheap *)calloc(1, sizeof(*h));
+        if (!h) return NULL;
+        if (wb_tagheap_init(h, 2u << 20) != 0) { free(h); return NULL; }
+        TlsSetValue(idx, h);
+    }
+    return h;
+}
+#else
+static _Thread_local wb_tagheap wb_tagheap_tls;
+static _Thread_local int        wb_tagheap_tls_ready;
+
+wb_tagheap *wb_tagheap_thread(void) {
+    if (!wb_tagheap_tls_ready) {
+        if (wb_tagheap_init(&wb_tagheap_tls, 2u << 20) != 0) return NULL;
+        wb_tagheap_tls_ready = 1;
+    }
+    return &wb_tagheap_tls;
+}
+#endif
+
+void *wb_tagheap_thread_alloc(uint32_t tag, size_t bytes, size_t align) {
+    wb_tagheap *h = wb_tagheap_thread();
+    return h ? wb_tagheap_alloc(h, tag, bytes, align) : NULL;
+}
+
+void wb_tagheap_thread_reset(uint32_t tag) {
+    wb_tagheap *h = wb_tagheap_thread();
+    if (h) wb_tagheap_reset_tag(h, tag);
+}
