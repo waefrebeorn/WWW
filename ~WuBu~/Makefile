@@ -46,7 +46,7 @@ run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -219,6 +219,12 @@ TEST_PROF := build/wb_prof_test.exe
 test-prof: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_prof.c tests/wb_prof_test.c -o $(TEST_PROF)
 	./$(TEST_PROF)
+
+# test-det: LP-03 stone 1 -- deterministic substrate (splitmix64 PRNG, FNV-1a)
+TEST_DET := build/wb_det_test.exe
+test-det: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_det.c tests/wb_det_test.c -o $(TEST_DET)
+	./$(TEST_DET)
 
 clean:
 	rm -rf build
