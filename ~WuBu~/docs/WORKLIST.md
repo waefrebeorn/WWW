@@ -170,7 +170,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-50 | Persistence layer | XL | LP-33 | [478] | **PARTIAL** (snapshot + tail event log shipped) |
 | LP-51 | Identity & social graph | L | LP-33 | [478] | **PARTIAL** (friends/blocks/trust-rank graph shipped) |
 | LP-52 | Discovery & curation | L | LP-50 | [pass 1] | **PARTIAL** (catalog search, charts and featured shipped) |
-| LP-53 | Content moderation & safety | XL | LP-50 | [pass 1] | TODO |
+| LP-53 | Content moderation & safety | XL | LP-50 | [pass 1] | **PARTIAL** (moderation policy engine shipped) |
 | LP-54 | Age gating & legal posture | L | LP-50 | [472] | TODO |
 | LP-55 | Creator economy & publishing | XL | LP-50 | [477] | TODO |
 | LP-56 | Interoperability & federation | XL | LP-50 | [pass 1] | TODO |
