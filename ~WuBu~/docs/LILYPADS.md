@@ -736,7 +736,7 @@ exists as a note, not as work.
   Only the build key is missing.
 - **Declared spawns in `mode.json`.** Data before scripts — this is what makes
   cross-gametype travel work.
-- **The gate discipline.** 42 gates, 6216 assertions, 0 fail. Every pad adds
+- **The gate discipline.** 43 gates, 6243 assertions, 0 fail. Every pad adds
   one.
 
 ---

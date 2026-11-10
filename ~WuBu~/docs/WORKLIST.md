@@ -74,7 +74,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
-| LP-09 | GPU memory management (suballocation, placed resources, aliasing) | M | LP-06 | [532] | TODO |
+| LP-09 | GPU memory management (suballocation, placed resources, aliasing) | M | LP-06 | [532] | **PARTIAL** (suballocator w/ placed resources + aliasing shipped) |
 | LP-11 | Bindless resource binding | M | LP-09 | [88] | TODO |
 | LP-12 | Material system | L | LP-11 | [401] | TODO |
 | LP-13 | Texture streaming & GPU-compressed textures | L | LP-09 | [532] | TODO |
