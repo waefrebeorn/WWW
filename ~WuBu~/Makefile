@@ -22,7 +22,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -70,7 +70,7 @@ test-render: build
 
 TEST_EXP := build/wb_exp_test.exe
 test-exp: build $(LUA_OBJS)
-	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/core/wb_prof.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_OBJS) -o $(TEST_EXP) -lm
+	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_exp.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/lua/wb_script.c tests/wb_exp_test.c $(LUA_OBJS) -o $(TEST_EXP) -lm
 	./$(TEST_EXP)
 
 # test-lv: slerm-Lua -- the Wua submodule (~WuBu~/src/lv, github.com/waefrebeorn/Wua)

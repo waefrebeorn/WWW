@@ -77,6 +77,30 @@ int      wb_snap_equal(const wb_snap *a, const wb_snap *b) {
 }
 size_t   wb_snap_bytes(const wb_snap *s) { return s ? s->len : 0; }
 
+uint64_t wb_snap_digest_world(wb_world *w, const wb_comp_type *types, int ntypes) {
+    if (!w || !types || ntypes < 0) return 0;
+    uint64_t h = WB_DET_FNV_OFFSET;
+    uint32_t ni = wb_world_next_index(w);
+    for (uint32_t i = 0; i < ni; i++) {
+        if (!wb_world_slot_alive(w, i)) continue;
+        uint32_t gen = wb_world_slot_gen(w, i);
+        uint8_t mask = 0;
+        for (int t = 0; t < ntypes; t++)
+            if (wb_world_comp_present(w, types[t], i)) mask |= (uint8_t)(1u << t);
+        /* identical byte stream to wb_snap_capture, so the digests match */
+        h = wb_det_checksum_stream(h, &i, sizeof(i));
+        h = wb_det_checksum_stream(h, &gen, sizeof(gen));
+        h = wb_det_checksum_stream(h, &mask, sizeof(mask));
+        for (int t = 0; t < ntypes; t++) {
+            if (!(mask & (uint8_t)(1u << t))) continue;
+            size_t sz = wb_world_comp_elem_size(w, types[t]);
+            const unsigned char *base = (const unsigned char *)wb_world_comp_data(w, types[t]);
+            h = wb_det_checksum_stream(h, base + (size_t)i * sz, sz);
+        }
+    }
+    return h;
+}
+
 int wb_snap_restore(wb_world *w, const wb_comp_type *types, int ntypes, const wb_snap *s) {
     if (!w || !s || !types || ntypes < 0) return 0;
     const uint8_t *p = s->bytes;

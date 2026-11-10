@@ -31,6 +31,11 @@ uint64_t wb_snap_digest(const wb_snap *s);
 int      wb_snap_equal(const wb_snap *a, const wb_snap *b);
 size_t   wb_snap_bytes(const wb_snap *s);   /* packed length */
 
+/* Lightweight per-tick checksum: streams the same stable-ordered world state
+ * through FNV-1a with no allocation. Identical to wb_snap_digest(capture()).
+ * This is what a headless sim emits every tick to detect divergence. */
+uint64_t wb_snap_digest_world(wb_world *w, const wb_comp_type *types, int ntypes);
+
 /* Overwrite the component bytes of each captured entity that still exists at
  * the same index with the captured generation. Returns records written back;
  * entities gone/reallocated are skipped. */

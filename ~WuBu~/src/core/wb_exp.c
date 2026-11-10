@@ -10,6 +10,7 @@
 #include "wb_ecs.h"
 #include "wb_script.h"
 #include "wb_prof.h"
+#include "wb_snap.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <string.h>
@@ -25,6 +26,7 @@ struct wb_exp {
     wb_world    *world;
     lua_State   *L;
     uint32_t     tick;
+    uint64_t     digest;   /* LP-03: per-tick world checksum */
 };
 
 wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
@@ -92,6 +94,11 @@ uint32_t wb_exp_step(wb_exp *e, float dt) {
     double *ent = wb_prof_counter(pr, "exp.entities");
     uint32_t n = wb_entity_count(e->world);
     if (ent) *ent = (double)n;
+    /* LP-03: per-tick divergence detector over the engine's sim state */
+    static const wb_comp_type kState[] = { CPOS, CVEL };
+    e->digest = wb_snap_digest_world(e->world, kState, 2);
     wb_prof_end_frame(pr);
     return n;
 }
+
+uint64_t wb_exp_digest(const wb_exp *e) { return e ? e->digest : 0; }

@@ -47,6 +47,12 @@ int main(void){
     CHECK(aN == LOAD_MOBS, "A did not grow on its own");
     CHECK(bN == LOAD_MOBS, "B did not grow on its own");
 
+    /* LP-03: digest is deterministic across identical instances and steps */
+    uint64_t da = wb_exp_digest(a), db_ = wb_exp_digest(b);
+    CHECK(da != 0, "per-tick digest is non-zero after stepping");
+    CHECK(da == db_, "identically stepped instances share a digest");
+    CHECK(wb_exp_digest(NULL) == 0, "null experience digest is 0");
+
     /* join a player into A only -> A has exactly one more than B */
     int jA = wb_exp_join(a, "player_conan");
     CHECK(jA == 1, "player joined instance A");
@@ -54,6 +60,7 @@ int main(void){
     bN = wb_exp_step(b,1.0f/60.0f);
     CHECK(aN == bN + 1, "joined player lives ONLY in A's world (isolation)");
     CHECK(aN == LOAD_MOBS + 1, "A count = 2 mobs + 1 joined player");
+    CHECK(wb_exp_digest(a) != wb_exp_digest(b), "adding a player diverges the digest");
 
     /* B is completely unaffected */
     CHECK(bN == LOAD_MOBS, "B untouched by A's join");

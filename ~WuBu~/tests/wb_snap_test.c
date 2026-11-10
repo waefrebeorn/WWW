@@ -66,6 +66,8 @@ int main(void) {
     CHECK(wb_snap_digest(a1) != 0, "digest non-zero for a populated world");
     CHECK(wb_snap_bytes(a1) > 0, "snapshot holds packed bytes");
     CHECK(wb_snap_equal(a1, a2), "capture is pure: same world, same digest");
+    CHECK(wb_snap_digest_world(wa, ta, 2) == wb_snap_digest(a1),
+          "allocation-free per-tick digest matches the snapshot digest");
     CHECK(wb_snap_equal(a1, b), "independently rebuilt identical sim reproduces the digest");
 
     /* one-entity perturbation changes the digest */

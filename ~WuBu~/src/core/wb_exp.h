@@ -42,6 +42,12 @@ int wb_exp_join(wb_exp *e, const char *player_id);
 /* run one frame: step the gamemode's Lua (update) then entity count */
 uint32_t wb_exp_step(wb_exp *e, float dt);
 
+/* per-tick world checksum: FNV over the live entities' position + velocity in
+ * stable dense order (see wb_snap_digest_world). Two deterministically stepped
+ * experiences built the same way return the same digest; a diverged one does
+ * not. This is the sim's divergence detector. */
+uint64_t wb_exp_digest(const wb_exp *e);
+
 /* direct access to the experience's world for engine-side interop */
 void *wb_exp_world(wb_exp *e);
 
