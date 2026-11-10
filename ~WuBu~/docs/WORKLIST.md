@@ -119,6 +119,13 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | TODO |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
+| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
+| LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | TODO |
+| LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | TODO |
+| LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | TODO |
+| LP-97 | QoS / traffic shaping + per-client bandwidth budgets | M | LP-70 | [611][608][581] | TODO |
+| LP-98 | Edge / anycast server placement + orchestration | L | LP-33 | [607] | TODO |
+| LP-99 | Cross-server entity handoff wire protocol | L | LP-33 | [623][624] | TODO |
 
 ---
 
@@ -172,6 +179,30 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 
 ---
 
+## P6 — NESTED WORLDS & GEO (universe → stadium)
+
+The universe/world/continent/city/patch/stadium ladder, and the free geo stack
+for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
+
+| pad | work item | size | depends on | best source | status |
+|---|---|---|---|---|---|
+| LP-100 | Cross-level authority & travel | L | LP-33 | [586][589] | TODO |
+| LP-101 | Level-of-detail across levels | L | LP-15 | [593][594][595] | TODO |
+| LP-102 | Per-level persistence | L | LP-50 | [591][602] | TODO |
+| LP-103 | Parent-child interest propagation | L | LP-71 | [588][598] | TODO |
+| LP-104 | Naming & addressing places across levels | M | LP-100 | [630][599] | TODO |
+| LP-105 | Instance placement at a level | M | LP-100 | [597][598][596] | TODO |
+| LP-106 | Per-level capacity & layering | L | LP-100, LP-34 | [599][598] | TODO |
+| LP-107 | Nested-volume reservation ledger / consensus | XL | LP-33 | [574] | TODO |
+| LP-108 | Nested-volume spatial queries | L | LP-107 | [593][594] | TODO |
+| LP-109 | LOD-across-planets | XL | LP-101 | [573][576] | TODO |
+| LP-110 | Open-data provenance & licensing for AGI | L | LP-79 | [583][616][622] | TODO |
+| LP-111 | Streaming planetary terrain | XL | LP-43 | [622] | TODO |
+| LP-112 | AGI-authored place validation | L | LP-110 | [618] | TODO |
+| LP-113 | Per-volume capacity / quotas | L | LP-107 | [574][585][584] | TODO |
+
+---
+
 ## Dependency forks (why this order)
 
 - **Determinism (LP-03) before rollback (LP-31)** — spend the cost in P0, cash it in P3.
@@ -181,9 +212,10 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
   multiplayer game; accessibility (LP-59) with the first shipped gametype.
 - **LP-75 (build key) is the fix for the known DDC staleness** — do it with LP-36.
 
-## Wave 7 at a glance (33 third-degree pads)
+## Waves 7 & 8 at a glance
 
-RENDER: LP-60..65 · ANIMATE/CONNECT: LP-66..72 · AUTHOR: LP-73..79 · HOST: LP-80..86 · INSTRUMENT/SIMULATE: LP-87..92.
+- **Wave 7 (third-degree, 33 pads):** RENDER LP-60..65 · ANIMATE/CONNECT LP-66..72 · AUTHOR LP-73..79 · HOST LP-80..86 · INSTRUMENT/SIMULATE LP-87..92.
+- **Wave 8 (focused, 21 pads):** NETWORKING LP-93..99 · NESTING LP-100..106 · GEO+RESERVATION LP-107..113.
 
 ## Research corpus
 

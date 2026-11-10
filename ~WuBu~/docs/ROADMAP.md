@@ -5,7 +5,7 @@ stand on. The roadmap is the pond drawn out: the **sections** (swaths) you have
 to cross, and the order the stones are laid so the next hop is always reachable.
 It is not a schedule, and it is not a grid of phases. It is a walk.
 
-The full stone list is `LILYPADS.md` (92 pads, dependency-ordered). This doc is
+The full stone list is `LILYPADS.md` (113 pads, dependency-ordered). This doc is
 only the shape of the crossing. The whiteboard sections below are the working
 draft — they are meant to be edited, not filed.
 

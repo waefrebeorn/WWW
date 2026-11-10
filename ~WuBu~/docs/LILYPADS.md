@@ -486,6 +486,36 @@ Each existing pad pinned to the single best authoritative source (talk+speaker+y
 - LP-08 SIMD / memory ordering — [554] Preshing, *Acquire and Release Semantics*; [548] Drepper, *What Every Programmer Should Know About Memory*
 - LP-10 geometry optimization — [322] Forsyth, *Linear-Speed Vertex Cache Optimisation*; [318] zeux, *Learning from data*
 
+**NETWORKING (deep)**
+- QUIC / WebTransport — [579] RFC 9000; [614] RFC 9221 (unreliable DATAGRAM); [578] MDN WebTransport
+- Fragmentation / MTU / PSN — [577] Fiedler, *Packet Fragmentation and Reassembly*
+- NAT traversal — [613] RFC 8445 (ICE / STUN / TURN)
+- Interest-management variants — [580] VELVET (de Oliveira); [629] Fiedler priority accumulator
+- Server meshing / authority transfer — [623] SpatialOS (via SparkEngine); [624] HeliosEngine epoch-fenced handoff
+- Netcode telemetry & replay — [604][626] Aldridge, *I Shot You First* (GDC 2011)
+- Lag-comp / rollback — [603] *Formalizing Rollback Netcodes* (OPODIS 2025)
+- Dedicated-server orchestration — [606][631] Agones docs + FAQ
+- Edge / anycast — [607] Edgegap orchestration
+- QoS / traffic shaping — [611] NetEm; [608] WireGuard DSCP
+- Encryption / anti-tamper — [608] WireGuard protocol; [609] 6it.dev
+- Clock sync — [610] NTP; [612] Rivas Acosta
+- Delta baseline / ack — [581] Valve *Source Multiplayer Networking*
+- Prediction / reconciliation — [67] Gambetta; [1] Overwatch
+- Bandwidth budgets — [604] Aldridge; [581] Source `rate`
+
+**NESTING (universe → stadium)**
+- universe — [587] Roblox *publish games and places*; [630] Universes API
+- world — [591] Minecraft *World*
+- continent — [589] Second Life *Geography* (grid / continent / sim)
+- city — [599] Second Life *Land* (region/sim, 100-avatar cap)
+- patch — [593] Bing *Maps Tile System* (quadkey); [594] S2; [595] H3
+- stadium — [597] Roblox *client-server runtime*; [600] TeleportService
+
+**GEO + RESERVATION**
+- reservation — [574] Agones *GameServerAllocation*
+- free geo stack — [576] CesiumGS *3D Tiles* (OGC); [582] OGC CDB; [583] OSM ODbL; [616] MS Building Footprints; [622] USGS Mars MOLA DEM
+- planetary nesting — [573][621] OGC DGGS (Topic 21); [618] OGC AI-DGGS Pilot
+
 ---
 
 ## Wave 7 — third-degree additions
@@ -603,6 +633,79 @@ A generic malloc has a heavy tail (~29 ns median, ~115 µs p99 for 2,000 allocs 
 
 ---
 
+## Wave 8 — focused additions (networking · nesting · geo)
+
+### NETWORKING
+
+### LP-93 — QUIC / WebTransport transport + connection migration + browser path
+No QUIC option, no 0-RTT reconnect, no NAT-rebinding / Wi-Fi↔cellular migration, no browser API. RFC 9000 is the canonical transport; RFC 9221 adds the unreliable DATAGRAM extension explicitly motivated by gaming; WebTransport is the browser path. *[579][614][578]* · **Size L**
+
+### LP-94 — Packet fragmentation / reassembly + MTU/PSN discipline
+No 1200-byte MTU budget, no fragment/reassembly layer, no PSN wrap handling; a burst delta snapshot can exceed MTU and drop the whole packet. Fiedler: 1472 upper / 1200 conservative MTU, 16-bit PSN, free fragment packet type, loss-amplification 1−p^n. *[577]* · **Size M**
+
+### LP-95 — NAT traversal (ICE/STUN/TURN) + signaling + relay fallback
+No STUN reflexive discovery, no TURN relay for symmetric NATs, no ICE candidate exchange or connect-token gateway. RFC 8445. *[613]* · **Size L**
+
+### LP-96 — Clock synchronization / time authority
+No client-server clock sync, no RTT-based offset estimation, no drift correction — lag comp, rollback and replays lack a shared time base. NTP's symmetric-delay offset estimation; Rivas Acosta's game-server adaptation. *[610][612]* · **Size M**
+
+### LP-97 — QoS / traffic shaping + per-client bandwidth budgets
+No `rate`-style per-client cap, no DSCP marking, no netem-style network emulation in the test suite. NetEm for shaping; WireGuard's DSCP discipline; Source's `rate` console variable for the cap. *[611][608][581]* · **Size M**
+
+### LP-98 — Edge / anycast server placement + latency-based orchestration
+No ideal-server placement per match, no regionless edge caching; server placement is treated as hosting, not a netcode lever. Edgegap: placement across 615+ edge locations, 58% latency reduction, ~2 s cold start. *[607]* · **Size L**
+
+### LP-99 — Cross-server entity handoff wire protocol
+No freeze/HANDOFF/ACCEPT/ROUTE/epoch-fencing/grace-window protocol for authority transfer, so LP-33's meshing control plane has no concrete wire contract. SpatialOS's authority/interest model; HeliosEngine's epoch-fenced handoff. *[623][624]* · **Size L**
+
+### NESTING (universe → stadium)
+
+### LP-100 — Cross-level authority & travel
+No model for which level's server owns a traveler at a boundary, and no atomic handover. Roblox teleports by PlaceId (cross-experience travel off by default); Second Life crosses sims by exiting one server and entering another. *[586][589]* · **Size L**
+
+### LP-101 — Level-of-detail across levels
+LOD is defined within a level (quadkey length = LOD; S2 31 levels; H3 16 resolutions) but never across levels — no parent-cell imposter/aggregate, no per-level detail budget. *[593][594][595]* · **Size L**
+
+### LP-102 — Per-level persistence
+No durability model for which level owns durable state (world seed → continent geometry → city props → patch terrain → stadium session). Minecraft persists per-dimension folders; Roblox DataStore is consistent per game across places/servers. *[591][602]* · **Size L**
+
+### LP-103 — Parent-child interest propagation
+Interest is computed at the patch level only; no parent-cell AOI, no aggregation of children's interest, no hierarchical culling. Roblox radius-based instance streaming; WoW area-of-interest/layers. *[588][598]* · **Size L**
+
+### LP-104 — Naming & addressing places across levels
+No hierarchical address (universe/world/continent/city/patch/stadium); a place is addressed only by flat quadkey + gametype. Roblox uses /universes/{universe_id}/places/{place_id}; Second Life parcels carry a local id plus global UUID. *[630][599]* · **Size M**
+
+### LP-105 — Instance placement at a level
+No rule for which level a stadium binds to, and no dedicated-node vs shared-node policy. Roblox hosts a server per place; WoW hosts instances on a realm; EVE dedicates a node to one solar system. *[597][598][596]* · **Size M**
+
+### LP-106 — Per-level capacity & layering
+No level-aware capacity/layering — cannot spawn sibling stadiums for a hot patch or pin a party to a layer. Second Life caps a region at 100 avatars; WoW shards/layers crowded zones to keep parties together. *[599][598]* · **Size L**
+
+### GEO + RESERVATION
+
+### LP-107 — Nested-volume reservation ledger / consensus
+No shared atomic ledger for who holds which nested spatial volume; every platform reserves a different unit (server slot, place GUID, compute, parcel) in its own silo. Agones GameServerAllocation specifies the lifecycle (Ready/Allocated/Shutdown), atomic conflict handling, and counters/lists capacity quotas. *[574]* · **Size XL**
+
+### LP-108 — Nested-volume spatial queries
+The quadkey answers point-to-cell, not the containment / overlap / adjacency / smallest-enclosing-volume queries needed to reserve nested volumes. *[593][594]* · **Size L**
+
+### LP-109 — LOD-across-planets
+No single LOD chain spans universe/planet/continent/city/building/room. DGGS gives hierarchical cells and 3D Tiles a render hierarchy, but nothing ties them across planets. *[573][576]* · **Size XL**
+
+### LP-110 — Open-data provenance & licensing for AGI
+ODbL (OSM), CDLA-Permissive (MS Building Footprints) and public-domain planetary DEMs (USGS) have no per-cell provenance/license ledger, and the content-addressed DDC carries no license metadata. Required before AGI-authored worlds ingest open geo data. *[583][616][622]* · **Size L**
+
+### LP-111 — Streaming planetary terrain
+The USGS Mars MGS MOLA DEM is a single 2 GB GeoTIFF; WWW has no terrain representation and no planetary terrain streaming format. *[622]* · **Size XL**
+
+### LP-112 — AGI-authored place validation
+No gate checks AGI-authored places against the source DEM, reservation/containment consistency, or license completeness before publish. The OGC AI-DGGS Pilot frames DGGS as the authoritative content store for AI/RAG queries — the validation substrate. *[618]* · **Size L**
+
+### LP-113 — Per-volume capacity / quotas
+Reservation models have capacity (Agones counters/lists, Second Life prim allowances, AWS AZ capacity) but WWW has no capacity model for nested volumes (stadium/patch/city/planet). *[574][585][584]* · **Size L**
+
+---
+
 ## Accepted risk — not a pad
 
 **The mod sandbox is escapable, and that is accepted.** `sandbox_blocked()` is a
@@ -637,6 +740,7 @@ exists as a note, not as work.
 
 ## Sources
 
+[1] https://www.gdcvault.com/play/1024001/-Overwatch-Gameplay-Architecture-and — GDC Vault: 'Overwatch' Gameplay Architecture and Netcode (Timothy Ford, GDC 2017)
 [4] https://gdcvault.com/play/1022187/Parallelizing-the-Naughty-Dog-Engine — Parallelizing the Naughty Dog Engine Using Fibers (GDC 2015)
 [5] https://media.gdcvault.com/gdc2015/presentations/Gyrling_Christian_Parallelizing_The_Naughty.pdf — Gyrling, Parallelizing the Naughty Dog engine using fibers (slides)
 [6] https://gdcvault.com/play/1022164/Multithreading-the-Entire- — Multithreading the Entire Destiny Engine (GDC 2015)
@@ -673,6 +777,7 @@ exists as a note, not as work.
 [62] https://gdcvault.com/play/1024086/Sounds-Deep-Spatial-Audio-from — GDC Vault: Sounds Deep: Spatial Audio from the Ground Up (Ian Kelly)
 [63] https://gdcvault.com/play/1026342/Spatial-Audio-in-Budget-Cuts — GDC Vault: Spatial Audio in 'Budget Cuts': A VR Stealth Game (Kjellberg/Antani)
 [66] https://www.gdcvault.com/play/1025471/8-Frames-in-16ms-Rollback — GDC Vault: 8 Frames in 16ms: Rollback Networking in 'Mortal Kombat' and 'Injustice 2'
+[67] https://www.gabrielgambetta.com/client-side-prediction-server-reconciliation.html — Gabriel Gambetta: Client-Side Prediction and Server Reconciliation
 [69] https://docs.rs/crate/luau-src/latest/source/luau/docs/_pages/sandbox.md — Luau docs: Embedding a sandboxed Luau virtual machine
 [71] https://gdcvault.com/play/1022074/In-Your-Hands-The-Character — GDC Vault: In Your Hands: The Character (of Watch_Dogs) (GDC 2015)
 [72] https://gdcvault.com/play/1021309/Math-for-Game-Programmers-Inverse — GDC Vault: Math for Game Programmers: Inverse Kinematics (Gino van den Bergen)
@@ -857,3 +962,50 @@ exists as a note, not as work.
 [566] https://github.com/syntaqx/syntaqx.com/blob/main/content/books/gaming/determinism-and-rollback.md — Lockstep, Rollback and Determinism (syntaqx)
 [567] https://gdcvault.com/play/1022929/Unified-Telemetry-Building-an-Infrastructure — Unified Telemetry, Building an Infrastructure for Big Data in Games Development (Maurizio De Pascale, Ubisoft Montreal, GDC 2016)
 [571] https://arxiv.org/html/1608.03676v1 — Coz: Finding Code that Counts with Causal Profiling (Curtsinger and Berger, SOSP 2015) full text
+[573] https://www.ogc.org/standards/dggs — OGC DGGS Standard | Discrete Global Grid Systems
+[574] https://agones.dev/site/docs/reference/gameserverallocation — Agones GameServerAllocation Specification
+[576] https://github.com/CesiumGS/3d-tiles — CesiumGS/3d-tiles: 3D Tiles specification repo
+[577] https://gafferongames.com/post/packet_fragmentation_and_reassembly — Glenn Fiedler, Packet Fragmentation and Reassembly (Networked Physics)
+[578] https://developer.mozilla.org/en-US/docs/Web/API/WebTransport_API — MDN Web Docs: WebTransport API
+[579] https://datatracker.ietf.org/doc/html/rfc9000 — RFC 9000: QUIC - A UDP-Based Multiplexed and Secure Transport (Iyengar & Thomson, IETF 2021)
+[580] https://www.lncc.br/~jauvane/papers/VELVET-ICC2002.pdf — VELVET: an adaptive hybrid architecture for very large virtual environments (de Oliveira et al., ICC 2002)
+[581] https://developer.valvesoftware.com/wiki/Source_Multiplayer_Networking — Valve Developer Community: Source Multiplayer Networking
+[582] https://www.ogc.org/standards/cdb — OGC CDB Standard - Synthetic Environment Data Model & Structure
+[583] https://www.openstreetmap.org/copyright/en — OpenStreetMap Copyright and License (ODbL)
+[584] https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/capacity-reservation-overview.html — AWS On-Demand Capacity Reservations and Capacity Blocks for ML
+[585] https://wiki.secondlife.com/wiki/About_Land — Second Life Wiki: About Land
+[586] https://create.roblox.com/docs/projects/teleport — Roblox Creator Docs: Teleport (reserved servers)
+[587] https://create.roblox.com/docs/en-us/production/publishing/publish-games-and-places — Roblox Creator Docs: Create and publish games and places (experience/place model)
+[588] https://create.roblox.com/docs/en-us/workspace/streaming — Roblox Creator Docs: Instance streaming
+[589] https://wiki.secondlife.com/wiki/Introduction_To_Second_Life_Geography — Second Life Wiki: Introduction To Second Life Geography (grid/continent/sim)
+[591] https://minecraft.wiki/w/World — Minecraft Wiki: World (world/dimension)
+[593] https://learn.microsoft.com/en-us/bingmaps/articles/bing-maps-tile-system — Microsoft Learn: Bing Maps Tile System (quadkey/LOD)
+[594] https://s2geometry.io/devguide/s2cell_hierarchy.html — S2Geometry: S2 Cells (cell hierarchy)
+[595] https://www.uber.com/us/en/blog/h3 — Uber Engineering: H3 Hexagonal Hierarchical Spatial Index
+[596] https://www.eveonline.com/news/view/tranquility-tech-iv — EVE Online: Tranquility Tech IV (cluster/node/system)
+[597] https://create.roblox.com/docs/projects/client-server — Roblox Creator Docs: Client-server runtime
+[598] https://warcraft.wiki.gg/wiki/Instance — Warcraft Wiki: Instance
+[599] https://wiki.secondlife.com/wiki/Land — Second Life Wiki: Land (parcel/region/estate/grid)
+[600] https://create.roblox.com/docs/en-us/reference/engine/classes/TeleportService — Roblox Creator Docs: TeleportService API (place/instance addressing)
+[602] https://create.roblox.com/docs/en-us/cloud-services/data-stores — Roblox Creator Docs: Data stores (per-game persistence)
+[603] https://drops.dagstuhl.de/storage/00lipics/lipics-vol361-opodis2025/html/LIPIcs.OPODIS.2025.11/LIPIcs.OPODIS.2025.11.html — Formalizing Rollback Netcodes for Robust and Real-Time Client-Server Multiplayer Games (OPODIS 2025)
+[604] https://www.wolfire.com/blog/2011/03/GDC-Session-Summary-Halo-networking — Wolfire: GDC Session Summary - Halo networking (David Aldridge, I Shot You First, GDC 2011)
+[606] https://agones.dev/site/docs — Agones Documentation (dedicated game server hosting/scaling on Kubernetes)
+[607] https://edgegap.com/platform/technology-explainer-game-server-hosting-orchestration — Edgegap: How game server orchestration works (regionless edge, ideal-server placement)
+[608] https://www.wireguard.com/protocol — WireGuard: Protocol & Cryptography (Noise_IK, ChaCha20-Poly1305 over UDP)
+[609] https://6it.dev/blog/udp-for-games--security-encryption-and-ddos-protection-1213 — UDP for games: security (encryption and DDoS protection)
+[610] https://www.ntp.org/ntpfaq/NTP-s-algo — NTP FAQ: How does it work? (clock synchronization algorithm)
+[611] https://www.linux.org/docs/man8/tc-netem.html — NetEm (tc-netem) - Linux network emulator / traffic shaping
+[612] https://daily.dev/posts/how-to-think-about-game-servers-pt-2---hernan-rivas-acosta-erlang-solutions-webinar-kuzpbm8qr — Hernan Rivas Acosta: How to Think About Game Servers Pt 2 (clock sync, lag compensation)
+[613] https://datatracker.ietf.org/doc/html/rfc8445 — RFC 8445: Interactive Connectivity Establishment (ICE) - NAT traversal
+[614] https://datatracker.ietf.org/doc/html/rfc9221 — RFC 9221: An Unreliable Datagram Extension to QUIC
+[616] https://github.com/microsoft/globalmlbuildingfootprints — Microsoft Global ML Building Footprints
+[618] https://www.ogc.org/initiatives/ai-dggs-pilot — OGC AI-DGGS Pilot: Mapping the World with Smart Grid Cells
+[621] https://docs.ogc.org/as/20-040r3/20-040r3.html — OGC Topic 21 - Discrete Global Grid Systems (Abstract Specification)
+[622] https://astrogeology.usgs.gov/search/map/mars_mgs_mola_dem_463m — USGS Astropedia: Mars MGS MOLA DEM 463m
+[623] https://github.com/Krilliac/SparkEngine/wiki/Engine-and-Renderer-Landscape — SparkEngine wiki: Engine and Renderer Landscape (SpatialOS authority/interest, server meshing)
+[624] https://github.com/PageMastr/HeliosEngine/blob/main/docs/research/07-mmo-backend-architecture.md — HeliosEngine: MMO backend architecture (epoch-fenced authority handoff, ghost entities)
+[626] https://www.youtube.com/watch?v=h47zZrqjgLc — GDC 2011: David Aldridge (Bungie), I Shot You First - Halo: Reach netcode
+[629] https://gafferongames.com/post/state_synchronization — Glenn Fiedler, State Synchronization (Networked Physics)
+[630] https://create.roblox.com/docs/cloud/reference/features/universes — Roblox Creator Docs: Universes API reference (universe/place addressing)
+[631] https://agones.dev/site/docs/faq — Agones FAQ (scale targets, GameServer lifecycle)
