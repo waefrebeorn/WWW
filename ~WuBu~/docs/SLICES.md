@@ -2,7 +2,8 @@
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 92 pads in dependency order, each with its sources —
-is `docs/LILYPADS.md`.
+is `docs/LILYPADS.md`. The same backlog turned into an ordered, status-tracked
+execution list is `docs/WORKLIST.md`.
 Each slice ships real, tested code; nothing is marked done without a green gate.
 
 | Slice | Pillar | Deliverable | Gate | Status |
