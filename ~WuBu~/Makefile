@@ -52,7 +52,7 @@ run-mode: $(TARGET)
 # (make e=4551). It is not a code failure. Workaround: delete the named exe and
 # re-run -- the next link usually passes. A full-suite run may need several
 # delete-and-retry rounds on a fresh checkout.
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -273,6 +273,12 @@ TEST_ACCESS := build/wb_access_test.exe
 test-access: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_access.c src/core/wb_pool.c tests/wb_access_test.c -o $(TEST_ACCESS) $(LDLIBS)
 	./$(TEST_ACCESS)
+
+# test-atomic: LP-08 stone 2 -- memory ordering (release/acquire message passing)
+TEST_ATOMIC := build/wb_atomic_test.exe
+test-atomic: build
+	$(CC) $(CFLAGS) -Isrc/core tests/wb_atomic_test.c -o $(TEST_ATOMIC) $(LDLIBS)
+	./$(TEST_ATOMIC)
 
 clean:
 	rm -rf build
