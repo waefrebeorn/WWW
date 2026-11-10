@@ -25,7 +25,7 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 
 ## Running totals
 
-`make test` currently: **61 gates, 6639 assertions, 0 fail.**
+`make test` currently: **62 gates, 6677 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 6 · EXP 15 · LV 58 · LV-SCRIPT 14 ·
 PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSETS 30 · NET 28 · AVATAR 32 · MOD 21 ·

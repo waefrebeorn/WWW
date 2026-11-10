@@ -35,7 +35,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-01 | Profiling, telemetry, statistics ring buffer | M | — | [147][567] | **PARTIAL** (counters/zones/ring/budget/percentiles shipped) |
 | LP-02 | Memory architecture (tagged heap, per-thread blocks, frame allocators) | L | LP-01 | [18][13] | **SHIPPED** (frame allocator + HIVE substrate + tag heap + per-thread heaps) |
 | LP-05 | Performance & memory budgets (budget-fails-build gate) | M | LP-01, LP-02 | [559][564] | **PARTIAL** (named budgets + tag-heap enforcement shipped; build gate wired) |
-| LP-47 | Engine testing & CI (replay-based regression) | L | LP-03 | [562][566] | TODO |
+| LP-47 | Engine testing & CI (replay-based regression) | L | LP-03 | [562][566] | **PARTIAL** (checksummed replay recorder shipped) |
 | LP-48 | Large-team source-control workflow | M | — | [245] | TODO |
 
 ### SIMULATE
