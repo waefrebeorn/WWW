@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 66 gates, 6809 assertions
+mingw32-make test       # 67 gates, 6868 assertions
 mingw32-make run        # runs the omniverse-hub gametype
 ./build/wubu_engine.exe games omniverse-hub
 ```
