@@ -52,6 +52,9 @@ int main(void){
     CHECK(da != 0, "per-tick digest is non-zero after stepping");
     CHECK(da == db_, "identically stepped instances share a digest");
     CHECK(wb_exp_digest(NULL) == 0, "null experience digest is 0");
+    CHECK(wb_exp_render_alpha(a) >= 0.0f && wb_exp_render_alpha(a) < 1.0f,
+          "render-interpolation alpha stays in [0,1)");
+    CHECK(wb_exp_render_alpha(NULL) == 0.0f, "null experience render alpha is 0");
 
     /* join a player into A only -> A has exactly one more than B */
     int jA = wb_exp_join(a, "player_conan");

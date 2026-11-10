@@ -11,6 +11,8 @@
 #include "wb_script.h"
 #include "wb_prof.h"
 #include "wb_snap.h"
+#include "wb_det.h"
+#include "wb_interp.h"
 #include <lua.h>
 #include <lauxlib.h>
 #include <string.h>
@@ -20,6 +22,10 @@
 /* components a gamemode expects; same schema as the script host */
 enum { CPOS, CVEL, CMASS, CLABEL, kComps };
 
+/* LP-04: the simulation rate. 64 Hz is exactly representable, so whole steps
+ * land with no drift (see wb_det_fixed). */
+#define WB_EXP_FIXED_DT (1.0 / 64.0)
+
 struct wb_exp {
     char         name[64];
     wb_qkey      cell;
@@ -27,6 +33,8 @@ struct wb_exp {
     lua_State   *L;
     uint32_t     tick;
     uint64_t     digest;   /* LP-03: per-tick world checksum */
+    wb_det_fixed acc;      /* LP-04: fixed-step accumulator */
+    float        render_alpha; /* LP-04: fractional step in [0,1) */
 };
 
 wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
@@ -38,6 +46,9 @@ wb_exp *wb_exp_spawn(const wb_exp_cfg *cfg, const char *gamemode_name) {
     snprintf(e->name, sizeof(e->name), "%s", gamemode_name ? gamemode_name : "game");
     e->cell = cfg->cell;
     e->tick = 0;
+    e->digest = 0;
+    wb_det_fixed_init(&e->acc, WB_EXP_FIXED_DT);
+    e->render_alpha = 0.0f;
 
     e->world = wb_world_new();
     if (!e->world) { free(e); return NULL; }
@@ -87,10 +98,16 @@ uint32_t wb_exp_step(wb_exp *e, float dt) {
     /* LP-01: each step is one profile frame. */
     wb_prof *pr = wb_prof_default();
     wb_prof_begin_frame(pr);
-    /* gamemode update first (Lua mutates velocity), then C integrates */
-    WB_PROF_ZONE(pr, "exp.script")  { wb_script_step(e->L, dt); }
-    WB_PROF_ZONE(pr, "exp.physics") { wb_physics_tick(e->world, dt); }
-    e->tick++;
+    /* LP-04: consume whole fixed steps from the accumulator; the fractional
+     * remainder is the render-interpolation alpha. Cosmetic only -- the sim
+     * state is never interpolated, only the transform the renderer draws. */
+    int steps = wb_det_fixed_advance(&e->acc, (double)dt);
+    for (int i = 0; i < steps; i++) {
+        WB_PROF_ZONE(pr, "exp.script")  { wb_script_step(e->L, (float)WB_EXP_FIXED_DT); }
+        WB_PROF_ZONE(pr, "exp.physics") { wb_physics_tick(e->world, (float)WB_EXP_FIXED_DT); }
+        e->tick++;
+    }
+    e->render_alpha = wb_interp_alpha(wb_det_fixed_remainder(&e->acc), WB_EXP_FIXED_DT);
     double *ent = wb_prof_counter(pr, "exp.entities");
     uint32_t n = wb_entity_count(e->world);
     if (ent) *ent = (double)n;
@@ -102,3 +119,4 @@ uint32_t wb_exp_step(wb_exp *e, float dt) {
 }
 
 uint64_t wb_exp_digest(const wb_exp *e) { return e ? e->digest : 0; }
+float    wb_exp_render_alpha(const wb_exp *e) { return e ? e->render_alpha : 0.0f; }

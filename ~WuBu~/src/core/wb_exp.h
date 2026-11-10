@@ -48,6 +48,9 @@ uint32_t wb_exp_step(wb_exp *e, float dt);
  * not. This is the sim's divergence detector. */
 uint64_t wb_exp_digest(const wb_exp *e);
 
+/* fractional-step render-interpolation alpha in [0,1) after the last step */
+float wb_exp_render_alpha(const wb_exp *e);
+
 /* direct access to the experience's world for engine-side interop */
 void *wb_exp_world(wb_exp *e);
 
