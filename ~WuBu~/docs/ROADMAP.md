@@ -80,7 +80,7 @@ persistence → identity → discovery → moderation → economy → interopera
 
 ## The stones already underfoot
 
-The engine runs a gametype package (slice 22). 24 gates, 845 assertions, 0
+The engine runs a gametype package (slice 22). 24 gates, 849 assertions, 0
 fail. The quadkey spine, the render graph, content-addressed DDC, and declared
 spawns in `mode.json` are not up for discussion in any of the above.
 

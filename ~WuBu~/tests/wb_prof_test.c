@@ -151,6 +151,24 @@ int main(void) {
     CHECK(wb_prof_overran(q) == 0, "generous budget does not trip");
     wb_prof_dispose(q);
 
+    /* ---- percentiles: the hitch view on a known window ------------------- */
+    wb_prof *s = wb_prof_new(10);
+    double *pct = wb_prof_counter(s, "pct");
+    for (int f = 1; f <= 10; f++) {          /* deltas 1..10 */
+        wb_prof_begin_frame(s);
+        *pct += (double)f;
+        wb_prof_end_frame(s);
+    }
+    wb_prof_stat ps;
+    wb_prof_summary(s, "pct", &ps);
+    CHECK(ps.n == 10, "percentile window holds all 10 frames");
+    CHECK(ps.p50 == 5.0f && ps.p95 == 10.0f && ps.p99 == 10.0f,
+          "nearest-rank percentiles on a 1..10 window");
+    CHECK(ps.mmin == 1.0f && ps.mmax == 10.0f && ps.mean == 5.5f,
+          "mean/min/max fold the same window");
+    CHECK(ps.last == 10.0f, "last is the newest frame");
+    wb_prof_dispose(s);
+
     /* ---- null-safety ---------------------------------------------------- */
     wb_prof_summary(NULL, "x", &st);
     st.n = 0; (void)st;

@@ -172,22 +172,40 @@ void wb_prof_zone_end(wb_prof *p, const char *name) {
 
 /* --- query ----------------------------------------------------------- */
 
+static int cmp_float(const void *a, const void *b) {
+    float x = *(const float *)a, y = *(const float *)b;
+    return (x > y) - (x < y);
+}
+/* nearest-rank index for percentile p (0..100): ceil(p*n/100)-1, floor at 0 */
+static int prank(int n, int p) { int r = (p * n + 99) / 100; return r > 0 ? r - 1 : 0; }
+
 int wb_prof_summary(wb_prof *p, const char *name, wb_prof_stat *out) {
     if (!p || !out) return 0;
     wb_prof_slot *s = wb_prof_find(p, name, NULL);
     if (!s) return 0;
     int n = s->written < p->ring ? s->written : p->ring;
     out->n = n;
-    if (n == 0) { out->last = out->mean = out->mmin = out->mmax = 0.f; return 1; }
+    if (n == 0) {
+        out->last = out->mean = out->mmin = out->mmax = 0.f;
+        out->p50 = out->p95 = out->p99 = 0.f;
+        return 1;
+    }
+    float *win = (float *)malloc((size_t)n * sizeof(float));
+    if (!win) { out->last = out->mean = out->mmin = out->mmax = 0.f; return 0; }
     float sum = 0.f;
-    float mn = s->ring[(s->written - n) % p->ring];
-    float mx = mn;
+    float mn = s->ring[(s->written - n) % p->ring], mx = mn;
     for (int k = 0; k < n; k++) {
         float v = s->ring[(s->written - n + k) % p->ring];  /* circular window */
+        win[k] = v;
         sum += v;
         if (v < mn) mn = v;
         if (v > mx) mx = v;
     }
+    qsort(win, (size_t)n, sizeof(float), cmp_float);
+    out->p50 = win[prank(n, 50)];
+    out->p95 = win[prank(n, 95)];
+    out->p99 = win[prank(n, 99)];
+    free(win);
     out->last = s->ring[(s->written - 1 + p->ring) % p->ring];
     out->mean = sum / (float)n;
     out->mmin = mn;
@@ -204,14 +222,14 @@ int wb_prof_report(wb_prof *p, FILE *f) {
         wb_prof_stat st;
         wb_prof_summary(p, s->name, &st);
         if (s->is_zone)
-            fprintf(f, "  %-20s zone  last=%7.2fms mean=%7.2fms min=%7.2f max=%7.2f frames=%d%s%s\n",
+            fprintf(f, "  %-20s zone  last=%7.2fms mean=%7.2fms p95=%7.2fms p99=%7.2fms frames=%d%s%s\n",
                     s->name, st.last * 1000.0, st.mean * 1000.0,
-                    st.mmin * 1000.0, st.mmax * 1000.0, st.n,
+                    st.p95 * 1000.0, st.p99 * 1000.0, st.n,
                     s->budget > 0.f ? " budget=" : "",
                     s->budget > 0.f ? (s->over ? "OVER!" : "") : "");
         else
-            fprintf(f, "  %-20s cnt   last=%11.1f mean=%11.1f min=%11.1f max=%11.1f frames=%d%s%s\n",
-                    s->name, st.last, st.mean, st.mmin, st.mmax, st.n,
+            fprintf(f, "  %-20s cnt   last=%11.1f mean=%11.1f p95=%11.1f p99=%11.1f frames=%d%s%s\n",
+                    s->name, st.last, st.mean, st.p95, st.p99, st.n,
                     s->budget > 0.f ? " budget=" : "",
                     s->budget > 0.f ? (s->over ? "OVER!" : "") : "");
         shown++;

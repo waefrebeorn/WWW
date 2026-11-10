@@ -51,6 +51,7 @@ typedef struct {
 typedef struct {
     int   n;             /* frames recorded in the window (<= ring) */
     float last, mean, mmin, mmax;
+    float p50, p95, p99; /* nearest-rank percentiles; the hitch view. */
 } wb_prof_stat;
 
 wb_prof *wb_prof_new(int ring);
