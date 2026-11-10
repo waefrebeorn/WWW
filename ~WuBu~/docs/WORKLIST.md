@@ -118,7 +118,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 |---|---|---|---|---|---|
 | LP-28 | Delta compression | M | LP-03 | [512] | **SHIPPED** (word-bitmap delta codec) |
 | LP-29 | Snapshot interpolation | S | LP-28 | [505] | **SHIPPED** (nlerp w/ shortest-arc flip) |
-| LP-30 | Lag compensation | M | LP-28 | [506] | TODO |
+| LP-30 | Lag compensation | M | LP-28 | [506] | **PARTIAL** (rewind buffer + interpolation shipped) |
 | LP-31 | Rollback netcode | L | LP-03, LP-04, LP-28 | [148][66] | TODO |
 | LP-32 | Network debugging & profiling tooling | M | LP-28 | [509] | TODO |
 | LP-33 | Server meshing control plane | L | LP-31 | [508] | TODO |
