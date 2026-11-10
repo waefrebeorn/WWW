@@ -23,7 +23,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -52,7 +52,7 @@ run-mode: $(TARGET)
 # (make e=4551). It is not a code failure. Workaround: delete the named exe and
 # re-run -- the next link usually passes. A full-suite run may need several
 # delete-and-retry rounds on a fresh checkout.
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -265,13 +265,13 @@ test-job: build
 # test-pool: LP-06 stone 2 -- the worker pool (deterministic parallel-for)
 TEST_POOL := build/wb_pool_test.exe
 test-pool: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_pool.c tests/wb_pool_test.c -o $(TEST_POOL) $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_pool.c src/core/wb_hive.c tests/wb_pool_test.c -o $(TEST_POOL) $(LDLIBS)
 	./$(TEST_POOL)
 
 # test-access: LP-07 stone 1 -- data-access validation (safe-point tracking)
 TEST_ACCESS := build/wb_access_test.exe
 test-access: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_access.c src/core/wb_pool.c tests/wb_access_test.c -o $(TEST_ACCESS) $(LDLIBS)
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_access.c src/core/wb_pool.c src/core/wb_hive.c tests/wb_access_test.c -o $(TEST_ACCESS) $(LDLIBS)
 	./$(TEST_ACCESS)
 
 # test-atomic: LP-08 stone 2 -- memory ordering (release/acquire message passing)
@@ -285,6 +285,12 @@ TEST_FRAME := build/wb_frame_test.exe
 test-frame: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_frame.c tests/wb_frame_test.c -o $(TEST_FRAME)
 	./$(TEST_FRAME)
+
+# test-hive: LP-02 stone 2 -- THE HIVE (linked blocks + skipfield + freelist)
+TEST_HIVE := build/wb_hive_test.exe
+test-hive: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_hive.c tests/wb_hive_test.c -o $(TEST_HIVE)
+	./$(TEST_HIVE)
 
 clean:
 	rm -rf build

@@ -34,10 +34,13 @@ markers go in **first** — retrofitting them later is what everyone regrets.
 *[147][150][155][306]* · **Size M** · Unlocks evidence for every later pad.
 
 ### LP-02 — Memory architecture
-Tagged-lifetime heap with 2 MiB blocks and no `free(ptr)`; per-thread blocks so
-no locks are needed for 99.9% of allocations; per-thread frame allocators;
-double-buffered GPU scratch; allocation sentinels and tracing. Naughty Dog
-removed 100–200 MiB of wasted worst-case linear allocators this way.
+**The substrate is the HIVE, not a FIFO ring** (slermed from wubuwizard/slermes
+`wubu_hive.c`): linked fixed blocks + skipfield + freelist — stable slot
+addresses, O(1) amortized insert, O(1) erase by slot, cache-friendly iteration,
+no compaction. Tagged-lifetime heap with 2 MiB blocks and no `free(ptr)`;
+per-thread blocks so no locks are needed for 99.9% of allocations; per-thread
+frame allocators; double-buffered GPU scratch; allocation sentinels and tracing.
+Naughty Dog removed 100–200 MiB of wasted worst-case linear allocators this way.
 *[5][13][14]* · **Size L** · Unlocks streaming scale and multithreading.
 
 ### LP-03 — Determinism suite
@@ -342,7 +345,7 @@ manifest exist; release deployment does not. *[192][193]* · **Size L**
 Deterministic replay as a regression tool, automated test frameworks, fuzzing,
 soak testing, and performance-regression tracking. TestMonkey (Santa Monica),
 Activision's automated testing and MergeBot, and Retro City Rampage's replay
-testing are the references. 1058 assertions exist; replay-based regression does
+testing are the references. 6100 assertions exist; replay-based regression does
 not. *[284][283]* · **Size L**
 
 ### LP-48 — Large-team source-control workflow
@@ -733,7 +736,7 @@ exists as a note, not as work.
   Only the build key is missing.
 - **Declared spawns in `mode.json`.** Data before scripts — this is what makes
   cross-gametype travel work.
-- **The gate discipline.** 34 gates, 1058 assertions, 0 fail. Every pad adds
+- **The gate discipline.** 35 gates, 6100 assertions, 0 fail. Every pad adds
   one.
 
 ---

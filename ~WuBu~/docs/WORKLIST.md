@@ -33,12 +33,20 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
 | LP-01 | Profiling, telemetry, statistics ring buffer | M | — | [147][567] | **PARTIAL** (counters/zones/ring/budget/percentiles shipped) |
-| LP-02 | Memory architecture (tagged heap, per-thread blocks, frame allocators) | L | LP-01 | [18][13] | **PARTIAL** (frame allocator shipped; tagged heap next) |
+| LP-02 | Memory architecture (tagged heap, per-thread blocks, frame allocators) | L | LP-01 | [18][13] | **PARTIAL** (frame allocator + HIVE substrate shipped; tagged heap next) |
 | LP-05 | Performance & memory budgets (budget-fails-build gate) | M | LP-01, LP-02 | [559][564] | **PARTIAL** (budget mechanism shipped) |
 | LP-47 | Engine testing & CI (replay-based regression) | L | LP-03 | [562][566] | TODO |
 | LP-48 | Large-team source-control workflow | M | — | [245] | TODO |
 
 ### SIMULATE
+
+> **Memory doctrine: HIVE, not FIFO.** WWW's memory containers use the HIVE
+> (linked fixed blocks + skipfield + freelist) rather than FIFO rings or
+> malloc/free chains — stable slot addresses, O(1) amortized insert, O(1) erase
+> by slot, cache-friendly iteration, no compaction. Slermed from
+> wubuwizard/slermes `wubu_hive.c`. `wb_hive` is the substrate; `wb_pool`'s job
+> queue and LP-02's allocators build on it. A FIFO *ordering* (job submission
+> order) is fine; a FIFO *container* for memory is not.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|

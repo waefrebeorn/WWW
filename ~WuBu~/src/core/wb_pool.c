@@ -1,25 +1,37 @@
 /*
  * wb_pool.c -- worker pool (LP-06 stone 2). See wb_pool.h.
+ *
+ * The job queue is HIVE memory, not a malloc/FIFO chain: every job record is a
+ * slot in a wb_hive (linked fixed blocks + skipfield + freelist), so a record's
+ * address is stable while queued and the freelist recycles it on completion.
+ * No malloc/free per job, no ring buffer, no compaction.
+ *
+ * The FIFO order is intrusive `next` pointers through the records -- the hive
+ * is the memory, the links are the ordering.
  */
 #include "wb_pool.h"
+#include "wb_hive.h"
 
 #include <pthread.h>
 #include <stdlib.h>
 
-typedef struct wb_job {
-    wb_pool_fn       fn;
-    void            *user;
-    struct wb_job   *next;
-} wb_job;
+typedef struct wb_pool_job {
+    wb_pool_fn     fn;      /* normal job */
+    void          *user;
+    wb_pool_map_fn map_fn;  /* set for a parallel-for chunk */
+    int            start, end, slot;
+    struct wb_pool_job *next;
+} wb_pool_job;
 
 struct wb_pool {
-    pthread_t     *threads;
-    int            nthreads;
+    pthread_t      *threads;
+    int             nthreads;
     pthread_mutex_t m;
     pthread_cond_t  cv;
-    wb_job         *head, *tail;
-    int            pending;    /* submitted but not finished */
-    int            shutdown;
+    wb_hive         jobs;        /* the job records (hive memory) */
+    wb_pool_job    *head, *tail; /* FIFO through the records */
+    int             pending;     /* submitted but not finished */
+    int             shutdown;
 };
 
 static void *wb_pool_worker(void *arg) {
@@ -29,15 +41,17 @@ static void *wb_pool_worker(void *arg) {
         while (!p->shutdown && !p->head)
             pthread_cond_wait(&p->cv, &p->m);
         if (p->shutdown && !p->head) { pthread_mutex_unlock(&p->m); return NULL; }
-        wb_job *j = p->head;
+        wb_pool_job *j = p->head;
         p->head = j->next;
         if (!p->head) p->tail = NULL;
         pthread_mutex_unlock(&p->m);
 
-        if (j->fn) j->fn(j->user);
-        free(j);
+        if (j->map_fn) j->map_fn(j->start, j->end, j->slot, j->user);
+        else if (j->fn) j->fn(j->user);
 
+        /* the hive is single-threaded: recycle the record under the pool lock */
         pthread_mutex_lock(&p->m);
+        wb_hive_drop(&p->jobs, j);
         if (--p->pending == 0) pthread_cond_broadcast(&p->cv);
         pthread_mutex_unlock(&p->m);
     }
@@ -49,6 +63,9 @@ wb_pool *wb_pool_new(int nthreads) {
     if (!p) return NULL;
     p->threads = (pthread_t *)calloc((size_t)nthreads, sizeof(pthread_t));
     if (!p->threads) { free(p); return NULL; }
+    if (wb_hive_init(&p->jobs, sizeof(wb_pool_job), 64) != 0) {
+        free(p->threads); free(p); return NULL;
+    }
     pthread_mutex_init(&p->m, NULL);
     pthread_cond_init(&p->cv, NULL);
     p->nthreads = nthreads;
@@ -60,6 +77,7 @@ wb_pool *wb_pool_new(int nthreads) {
             pthread_cond_broadcast(&p->cv);
             pthread_mutex_unlock(&p->m);
             for (int k = 0; k < i; k++) pthread_join(p->threads[k], NULL);
+            wb_hive_clear(&p->jobs);
             free(p->threads); free(p);
             return NULL;
         }
@@ -76,17 +94,20 @@ void wb_pool_free(wb_pool *p) {
     for (int i = 0; i < p->nthreads; i++) pthread_join(p->threads[i], NULL);
     pthread_mutex_destroy(&p->m);
     pthread_cond_destroy(&p->cv);
+    wb_hive_clear(&p->jobs);
     free(p->threads);
     free(p);
 }
 
 int wb_pool_submit(wb_pool *p, wb_pool_fn fn, void *user) {
     if (!p || !fn) return -1;
-    wb_job *j = (wb_job *)calloc(1, sizeof(*j));
-    if (!j) return -1;
-    j->fn = fn; j->user = user;
     pthread_mutex_lock(&p->m);
-    if (p->shutdown) { pthread_mutex_unlock(&p->m); free(j); return -1; }
+    if (p->shutdown) { pthread_mutex_unlock(&p->m); return -1; }
+    wb_pool_job *j = (wb_pool_job *)wb_hive_emit(&p->jobs);
+    if (!j) { pthread_mutex_unlock(&p->m); return -1; }
+    j->fn = fn; j->user = user; j->map_fn = NULL;
+    j->start = j->end = j->slot = 0;
+    j->next = NULL;
     if (p->tail) p->tail->next = j; else p->head = j;
     p->tail = j;
     p->pending++;
@@ -106,28 +127,23 @@ int wb_pool_nthreads(const wb_pool *p) { return p ? p->nthreads : 0; }
 
 /* ---- deterministic parallel-for ------------------------------------------ */
 
-typedef struct {
-    wb_pool_map_fn fn;
-    int start, end, slot;
-    void *user;
-} wb_map_job;
-
-static void wb_map_trampoline(void *arg) {
-    wb_map_job *j = (wb_map_job *)arg;
-    j->fn(j->start, j->end, j->slot, j->user);
-    free(j);
-}
-
 void wb_pool_map(wb_pool *p, wb_pool_map_fn fn, int n, int nslots, void *user) {
     if (!p || !fn || n <= 0 || nslots <= 0) return;
     if (nslots > n) nslots = n;
     for (int i = 0; i < nslots; i++) {
         int start = (int)((long)i * n / nslots);
         int end   = (int)((long)(i + 1) * n / nslots);
-        wb_map_job *j = (wb_map_job *)malloc(sizeof(*j));
-        if (!j) return;               /* out of memory: stop submitting */
-        j->fn = fn; j->start = start; j->end = end; j->slot = i; j->user = user;
-        if (wb_pool_submit(p, wb_map_trampoline, j) != 0) { free(j); return; }
+        pthread_mutex_lock(&p->m);
+        if (p->shutdown) { pthread_mutex_unlock(&p->m); return; }
+        wb_pool_job *j = (wb_pool_job *)wb_hive_emit(&p->jobs);
+        if (!j) { pthread_mutex_unlock(&p->m); return; }
+        j->fn = NULL; j->user = user; j->map_fn = fn;
+        j->start = start; j->end = end; j->slot = i; j->next = NULL;
+        if (p->tail) p->tail->next = j; else p->head = j;
+        p->tail = j;
+        p->pending++;
+        pthread_cond_signal(&p->cv);
+        pthread_mutex_unlock(&p->m);
     }
     wb_pool_wait(p);
 }

@@ -64,6 +64,32 @@ int main(void) {
     void *c2 = wb_frame_alloc(&f, 29, 8);
     CHECK(a1 == c1 && a2 == c2, "allocation is deterministic across resets");
 
+    /* ---- devil's advocate: alignment near a boundary, OOM recovery, big align ---- */
+    wb_frame_reset(&f);
+    unsigned char *last = NULL;
+    int filled = 0;
+    for (;;) {
+        unsigned char *p = (unsigned char *)wb_frame_alloc(&f, 37, 1);
+        if (!p) break;
+        last = p;
+        filled++;
+    }
+    CHECK(filled > 1 && last != NULL, "the frame fills with odd-sized blocks");
+    CHECK(wb_frame_left(&f) < 37, "the leftover after filling is smaller than one block");
+    wb_frame_reset(&f);
+    CHECK(wb_frame_alloc(&f, 1, 1) == g_buf, "a reset frame recovers from OOM");
+
+    /* a large alignment reserves padding, then the block lands on it */
+    wb_frame_reset(&f);
+    unsigned char *huge = (unsigned char *)wb_frame_alloc(&f, 16, 1024);
+    CHECK(huge != NULL && ((unsigned long long)huge % 1024) == 0, "1024-byte alignment honoured");
+    unsigned char *after = (unsigned char *)wb_frame_alloc(&f, 16, 1);
+    CHECK(after == huge + 16, "allocation after a big-aligned block is contiguous");
+
+    /* an alignment larger than the buffer fails cleanly rather than wrapping */
+    wb_frame_reset(&f);
+    CHECK(wb_frame_alloc(&f, 16, (size_t)1 << 40) == NULL, "an impossible alignment fails cleanly");
+
     printf("%d checks, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
