@@ -476,7 +476,15 @@ Each existing pad pinned to the single best authoritative source (talk+speaker+y
 - LP-58 live ops — [475] PlayFab *data & analytics*
 - LP-59 accessibility — Microsoft GDK a11y (retained)
 
-**INSTRUMENT + SIMULATE** — pending the follow-up pass (`11-instrument-simulate.md`).
+**INSTRUMENT + SIMULATE**
+- LP-01 profiling/telemetry — [147] Tracy Profiler; [567] *Unified Telemetry* (GDC 2016)
+- LP-02 memory architecture — [18] Acton, *Data-Oriented Design and C++* (CppCon 2014); [13] MacDougall low-fragmentation
+- LP-03 determinism — [54] Frontier, *Cross-Platform Determinism* (GDC 2024); [541] Fiedler *Deterministic Lockstep*; [542] Yates fixed-point
+- LP-04 fixed timestep — [540] Fiedler, *Fix Your Timestep!*
+- LP-06 job systems — [5] Gyrling, *Parallelizing the Naughty Dog Engine* (GDC 2015); [552] Our Machinery fiber job system
+- LP-07 data-access validation — [6] Genova, *Multithreading the Entire Destiny Engine* (GDC 2015); [18] Acton DOD
+- LP-08 SIMD / memory ordering — [554] Preshing, *Acquire and Release Semantics*; [548] Drepper, *What Every Programmer Should Know About Memory*
+- LP-10 geometry optimization — [322] Forsyth, *Linear-Speed Vertex Cache Optimisation*; [318] zeux, *Learning from data*
 
 ---
 
@@ -573,6 +581,26 @@ The backlog names creator payout but not the consumer-spend side. Regulators are
 ### LP-86 — Runtime plugin/module & avatar-item marketplace
 Discovery covers gametypes, but users can't obtain engine plugins, avatar items, or reusable content in a trusted, versioned way. Reference: Godot Asset Store (reviews, versions, changelogs, publisher analytics); Roblox avatar-items-as-content. Distinct from gametype discovery. *[476][477]* · **Size XL**
 
+### INSTRUMENT + SIMULATE
+
+### LP-87 — Desync prevention & triage tooling
+LP-03 detects divergence; nothing localizes it. Record-replay-compare on every build/platform, state dumps + binary diffs at the first divergent tick, headless bot fuzzing that saves the failing seed, lockstep frame-steppers. Factorio CRCs the map every tick and diffs replays; Frontier built desync-analysis tooling; Riot logs hierarchical state + a replay farm. *[562][566][54]* · **Size L**
+
+### LP-88 — Causal profiling (what to optimize, not where time is)
+Coz (Curtsinger & Berger, SOSP 2015) virtually speeds up a line by slowing concurrent code and reports the predicted speedup — a 55%-runtime function may yield 4.5% if optimized away. Turns LP-01's counters into "which scope actually moves frame time". *[545][571]* · **Size M**
+
+### LP-89 — End-to-end latency measurement (input-to-photon)
+Frame time (LP-01) and network (LP-32) don't measure felt latency. NVIDIA PCL decomposes input-to-frame-start / frame-start-to-present / present-to-displayed and emits ETW markers (SIMULATION_START, RENDERSUBMIT_START, PRESENT_START/END) for per-frame correlation; Reflex/Frame Warp act on them. *[557][556]* · **Size M**
+
+### LP-90 — Statistical benchmarking methodology
+Budgets (LP-05) need trustworthy numbers. Google Benchmark (DoNotOptimize/ClobberMemory, repetitions, median/stdev, interleaving, warmup) over hand-rolled chrono; treat microbenchmarks as relative and bias-prone (DCE, cache state, DVFS, link order). Arm's GPU rules: frame-cost-matched workloads, 15 s runs with 5 s discarded. *[559][564][565]* · **Size M**
+
+### LP-91 — Compiler/toolchain determinism flags & static audits
+The toolchain silently breaks LP-03: enforce `-ffp-contract=off` / `/fp:precise` (no fast-math, no FP contraction), and static-scan for unseeded RNGs, pointer-keyed iteration, uninitialized memory. salivity's cross-platform determinism guide is the clearest statement of FMA / x87-vs-SSE / transcendental divergence. A build-config contract, not a style preference. *[562][151]* · **Size M**
+
+### LP-92 — Memory measurement practice (alloc tail latency, per-tag budgets, steady-state rate)
+A generic malloc has a heavy tail (~29 ns median, ~115 µs p99 for 2,000 allocs — 20 slow calls cost more than 1,980 fast ones); watch p99 allocation latency, not the mean. Measure per-frame allocation counts (steady state → zero) and per-tag bytes against budget; treat a p99 spike as a frame-budget event. Naughty Dog's tagged heap is the design response. *[563][5][13]* · **Size M**
+
 ---
 
 ## Accepted risk — not a pad
@@ -616,6 +644,7 @@ exists as a note, not as work.
 [13] https://gdcvault.com/play/1023309/Building-a-Low-Fragmentation-Memory — Building a Low-Fragmentation Memory System for 64-bit Games (GDC 2016)
 [14] https://media.gdcvault.com/gdc2016/Presentations/MacDougall_Aaron_Building_A_Low.pdf — MacDougall, Building a Low-Fragmentation Memory System for 64-bit Games (slides)
 [15] https://www.gdcvault.com/play/1034234/The-Job-System-in-Cyberpunk — The Job System in Cyberpunk 2077 (GDC 2024)
+[18] https://cppcon.org/third-keynote-2014 — Mike Acton, Data-Oriented Design and C++ (CppCon 2014 keynote)
 [19] https://www.slideshare.net/slideshow/gdc15-code-clinic/45590473 — Acton, GDC15 Code Clinic slides
 [20] https://gpuopen.com/download/gdc_2018_tutorial_memory_management_vulkan_dx12.pptx — Memory Management in Vulkan and DX12 (GDC 2018 slides)
 [24] https://gdcvault.com/play/1026013/GPU-Driven-Rendering-and-Virtual — GDC 2019, Oleksandr Drazhevskyi (Ubisoft), "GPU Driven Rendering and Virtual Texturing in
@@ -634,6 +663,7 @@ exists as a note, not as work.
 [44] https://media.gdcvault.com/gdc2023/Slides/Buildingnightcity_Tremblay_Charles.pdf — GDC 2023, Charles Tremblay (CD PROJEKT RED), "Building Night City: The Technology of Cyber
 [45] https://media.gdcvault.com/gdc2024/Slides/GDC+slide+presentations/Viau_Gauthier_DX12+Memory+Management.pdf — GDC 2024, Gauthier Viau (Massive Entertainment), "DX12 Memory Management in Snowdrop on PC
 [49] https://gdcvault.com/play/1034403/Applied-Mesh-Analysis-Automating-Distant — GDC 2024, Scott Kircher (Insomniac), "Applied Mesh Analysis: Automating Distant-City LODs
+[54] https://www.gdcvault.com/play/1034229/Cross-Platform-Determinism-in-Warhammer — GDC Vault: Cross-Platform Determinism in Warhammer Age of Sigmar: Realms of Ruin (Bradley
 [56] https://media.gdcvault.com/gdc2017/Presentations/Reed_Dan_NetworkingScriptedWeapons.pdf — Slides: Networking Scripted Weapons and Abilities in 'Overwatch' (Dan Reed, GDC 2017)
 [57] https://en.wikipedia.org/wiki/GGPO — Wikipedia: GGPO
 [58] https://words.infil.net/w02-netcode-p5.html — Fightin' Words: The Technical Side of Rollback Netcode
@@ -810,3 +840,20 @@ exists as a note, not as work.
 [534] https://gpuopen.com/download/GDC_2016_D3D12_Right_On_Queue_final.pdf — Right on Queue: Advanced DirectX 12 Programming (GDC 2016)
 [536] https://www.simoncoenen.com/blog/programming/graphics/DoomEternalStudy.html — DOOM Eternal Graphics Study (Simon Coenen)
 [537] https://en.wikipedia.org/wiki/Clipmap — Clipmap - Wikipedia (Megatexture)
+[540] https://gafferongames.com/post/fix_your_timestep — Glenn Fiedler, "Fix Your Timestep!", Gaffer On Games, 2004
+[541] https://www.gafferongames.com/post/deterministic_lockstep — Glenn Fiedler, "Deterministic Lockstep", Gaffer On Games
+[542] https://www.digitalsignallabs.com/fp.pdf — Randy Yates, "Fixed-Point Arithmetic: An Introduction", Digital Signal Labs (2007)
+[545] https://arxiv.org/abs/1608.03676 — Curtsinger & Berger, "Coz: Finding Code that Counts with Causal Profiling" (SOSP 2015)
+[548] https://www.akkadia.org/drepper/cpumemory.pdf — Ulrich Drepper, "What Every Programmer Should Know About Memory" (2007)
+[552] https://ruby0x1.github.io/machinery_blog_archive/post/fiber-based-job-system/index.html — Our Machinery, "Fiber based job system" (Tobias Persson)
+[554] https://preshing.com/20120913/acquire-and-release-semantics — Jeff Preshing, "Acquire and Release Semantics" (2012)
+[556] https://developer.nvidia.com/performance-rendering-tools/reflex — NVIDIA Reflex SDK (official documentation)
+[557] https://developer.nvidia.com/blog/understanding-and-measuring-pc-latency — Seth Schneider, "Understanding and Measuring PC Latency", NVIDIA Technical Blog (2023)
+[559] https://google.github.io/benchmark/user_guide.html — Google Benchmark, official user guide (statistical benchmarking methodology)
+[562] https://salivity.github.io/game-development/article/how-to-debug-network-game-desyncs-across-machines — How to Debug Network Game Desyncs Across Machines (salivity)
+[563] https://mightyprofessionalgaming.com/tutorials/memory-allocators-from-scratch.html — Memory Allocators from Scratch (Mighty Professional Gaming)
+[564] https://awesome-embedded-learning-studio.github.io/Tutorial_AwesomeModernCPP/en/vol6-performance/ch01-benchmark-methodology/01-why-microbenchmarks-lie — Why Microbenchmarks Lie (Modern C++ Tutorial)
+[565] https://arm-software.github.io/magog/docs/98_appendices/01_writing_benchmarks — Writing benchmarks (Arm Mobile Application GPU Optimization Guide)
+[566] https://github.com/syntaqx/syntaqx.com/blob/main/content/books/gaming/determinism-and-rollback.md — Lockstep, Rollback and Determinism (syntaqx)
+[567] https://gdcvault.com/play/1022929/Unified-Telemetry-Building-an-Infrastructure — Unified Telemetry, Building an Infrastructure for Big Data in Games Development (Maurizio De Pascale, Ubisoft Montreal, GDC 2016)
+[571] https://arxiv.org/html/1608.03676v1 — Coz: Finding Code that Counts with Causal Profiling (Curtsinger and Berger, SOSP 2015) full text
