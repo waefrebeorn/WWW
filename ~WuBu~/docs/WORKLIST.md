@@ -152,7 +152,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-44 | DCC tools pipeline | L | LP-36 | [485][484] | TODO |
 | LP-45 | Designer-facing data tooling | L | LP-36 | [486] | TODO |
 | LP-49 | Platform & certification engineering | M | LP-46 | [236] | TODO |
-| LP-73 | Sandboxed hot-reload reliability | M | LP-36 | [488] | TODO |
+| LP-73 | Sandboxed hot-reload reliability | M | LP-36 | [488] | **PARTIAL** (content-hash change detector shipped) |
 | LP-74 | Editor undo / transaction / command system | L | LP-36 | [491][489] | TODO |
 | LP-75 | Importer-versioned DAG asset builds + build-key correctness | L | LP-36 | [481][490] | TODO |
 | LP-76 | Cloud / dedicated build farms | L | LP-36 | [487] | TODO |
