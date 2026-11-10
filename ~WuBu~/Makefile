@@ -1,6 +1,7 @@
 # WuBu Engine -- build
 CC      := gcc
 CFLAGS  := -std=c11 -O2 -Wall -Wextra -Isrc/core -Ithirdparty/lua5.4
+LDLIBS  := -lm -lpthread
 # Pin make's command shell to the Git bash. Make auto-detects Hermes's
 # bundled sh.exe (WindowsApps, Smart App Control-blocked) and dies with
 # 'Access is denied' on the first gate. This is environmental, not code.
@@ -22,7 +23,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -36,7 +37,7 @@ build:
 	mkdir -p build
 
 $(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(LUA_OBJS) $(WORLDSPACE_SRC)
-	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ -lm
+	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ $(LDLIBS)
 
 run: $(TARGET)
 	./$(TARGET) games omniverse-hub
@@ -46,7 +47,12 @@ run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
 # test: build each core module standalone (no Lua host/main) + run its harness
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job
+# NOTE (environment): Windows Smart App Control intermittently blocks a freshly
+# linked test exe with "An Application Control policy has blocked this file"
+# (make e=4551). It is not a code failure. Workaround: delete the named exe and
+# re-run -- the next link usually passes. A full-suite run may need several
+# delete-and-retry rounds on a fresh checkout.
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool
 
 TEST_ECS := build/wb_test.exe
 test-ecs: build
@@ -255,6 +261,12 @@ TEST_JOB := build/wb_job_test.exe
 test-job: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_job.c tests/wb_job_test.c -o $(TEST_JOB)
 	./$(TEST_JOB)
+
+# test-pool: LP-06 stone 2 -- the worker pool (deterministic parallel-for)
+TEST_POOL := build/wb_pool_test.exe
+test-pool: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_pool.c tests/wb_pool_test.c -o $(TEST_POOL) $(LDLIBS)
+	./$(TEST_POOL)
 
 clean:
 	rm -rf build

@@ -342,7 +342,7 @@ manifest exist; release deployment does not. *[192][193]* · **Size L**
 Deterministic replay as a regression tool, automated test frameworks, fuzzing,
 soak testing, and performance-regression tracking. TestMonkey (Santa Monica),
 Activision's automated testing and MergeBot, and Retro City Rampage's replay
-testing are the references. 942 assertions exist; replay-based regression does
+testing are the references. 1015 assertions exist; replay-based regression does
 not. *[284][283]* · **Size L**
 
 ### LP-48 — Large-team source-control workflow
@@ -733,7 +733,7 @@ exists as a note, not as work.
   Only the build key is missing.
 - **Declared spawns in `mode.json`.** Data before scripts — this is what makes
   cross-gametype travel work.
-- **The gate discipline.** 30 gates, 942 assertions, 0 fail. Every pad adds
+- **The gate discipline.** 31 gates, 1015 assertions, 0 fail. Every pad adds
   one.
 
 ---
