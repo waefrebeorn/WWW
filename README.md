@@ -24,6 +24,8 @@ WWW/
     └── thirdparty/ vendored Lua 5.4 + MuJoCo
 ```
 
+> **~WuBu~ AGI** — one system, many repositories. This is the **world-space engine**. The Body is [WuBuOS](https://github.com/waefrebeorn/WuBuOS), the Brain wubuwizard, the Compiler WuBuNOS.
+
 ## Build & run
 
 ```bash
