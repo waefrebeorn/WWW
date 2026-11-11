@@ -148,7 +148,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-40 | Cinematics & sequencing | L | LP-22 | [482] | TODO |
 | LP-41 | VFX authoring | L | LP-19 | [213][208] | TODO |
 | LP-42 | UI system (widgets, text shaping, one-draw-call) | XL | LP-12 | [189][198] | TODO |
-| LP-43 | Terrain system | XL | LP-13, LP-15 | [202][289] | TODO |
+| LP-43 | Terrain system | XL | LP-13, LP-15 | [202][289] | **PARTIAL** (heightfield + exact mip chain + error-driven LOD shipped) |
 | LP-44 | DCC tools pipeline | L | LP-36 | [485][484] | **PARTIAL** (mesh import validator shipped) |
 | LP-45 | Designer-facing data tooling | L | LP-36 | [486] | TODO |
 | LP-49 | Platform & certification engineering | M | LP-46 | [236] | TODO |
