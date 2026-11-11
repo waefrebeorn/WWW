@@ -194,8 +194,8 @@ for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
-| LP-100 | Cross-level authority & travel | L | LP-33 | [586][589] | TODO |
-| LP-101 | Level-of-detail across levels | L | LP-15 | [593][594][595] | TODO |
+| LP-100 | Cross-level authority & travel | L | LP-33 | [586][589] | **PARTIAL** (two-phase escrow handover + epoch fence shipped) |
+| LP-101 | Level-of-detail across levels | L | LP-15 | [593][594][595] | **PARTIAL** (cross-level LOD chain w/ imposters shipped) |
 | LP-102 | Per-level persistence | L | LP-50 | [591][602] | TODO |
 | LP-103 | Parent-child interest propagation | L | LP-71 | [588][598] | **PARTIAL** (hierarchical AOI: aggregate/refine/coarsen shipped) |
 | LP-104 | Naming & addressing places across levels | M | LP-100 | [630][599] | **PARTIAL** (hierarchical address w/ canonical form shipped) |
