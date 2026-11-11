@@ -158,7 +158,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-76 | Cloud / dedicated build farms | L | LP-36 | [487] | TODO |
 | LP-77 | Multi-user co-authoring | XL | LP-74 | [483] | TODO |
 | LP-78 | Asset validation / lint pipeline | L | LP-36 | [490][492] | TODO |
-| LP-79 | Asset provenance & licensing | L | LP-36 | [490][492][493] | TODO |
+| LP-79 | Asset provenance & licensing | L | LP-36 | [490][492][493] | **PARTIAL** (provenance records + SPDX allowlist + credits shipped) |
 
 ---
 
