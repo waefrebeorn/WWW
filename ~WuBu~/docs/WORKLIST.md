@@ -202,7 +202,7 @@ for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
 | LP-105 | Instance placement at a level | M | LP-100 | [597][598][596] | TODO |
 | LP-106 | Per-level capacity & layering | L | LP-100, LP-34 | [599][598] | TODO |
 | LP-107 | Nested-volume reservation ledger / consensus | XL | LP-33 | [574] | **PARTIAL** (reservation ledger w/ ancestor-descendant exclusion shipped) |
-| LP-108 | Nested-volume spatial queries | L | LP-107 | [593][594] | TODO |
+| LP-108 | Nested-volume spatial queries | L | LP-107 | [593][594] | **PARTIAL** (quadkey containment/overlap/adjacency/enclose shipped) |
 | LP-109 | LOD-across-planets | XL | LP-101 | [573][576] | TODO |
 | LP-110 | Open-data provenance & licensing for AGI | L | LP-79 | [583][616][622] | TODO |
 | LP-111 | Streaming planetary terrain | XL | LP-43 | [622] | TODO |
