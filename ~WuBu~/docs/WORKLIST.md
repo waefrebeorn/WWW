@@ -204,7 +204,7 @@ for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
 | LP-107 | Nested-volume reservation ledger / consensus | XL | LP-33 | [574] | **PARTIAL** (reservation ledger w/ ancestor-descendant exclusion shipped) |
 | LP-108 | Nested-volume spatial queries | L | LP-107 | [593][594] | **PARTIAL** (quadkey containment/overlap/adjacency/enclose shipped) |
 | LP-109 | LOD-across-planets | XL | LP-101 | [573][576] | **PARTIAL** (universe level + per-planet chains shipped) |
-| LP-110 | Open-data provenance & licensing for AGI | L | LP-79 | [583][616][622] | TODO |
+| LP-110 | Open-data provenance & licensing for AGI | L | LP-79 | [583][616][622] | **PARTIAL** (per-cell license ledger + derivation fold shipped) |
 | LP-111 | Streaming planetary terrain | XL | LP-43 | [622] | TODO |
 | LP-112 | AGI-authored place validation | L | LP-110 | [618] | TODO |
 | LP-113 | Per-volume capacity / quotas | L | LP-107 | [574][585][584] | **PARTIAL** (capacity along the ancestor chain + per-holder subtree quotas shipped) |
