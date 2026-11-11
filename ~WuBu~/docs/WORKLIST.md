@@ -200,7 +200,7 @@ for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
 | LP-103 | Parent-child interest propagation | L | LP-71 | [588][598] | TODO |
 | LP-104 | Naming & addressing places across levels | M | LP-100 | [630][599] | **PARTIAL** (hierarchical address w/ canonical form shipped) |
 | LP-105 | Instance placement at a level | M | LP-100 | [597][598][596] | **PARTIAL** (placement planner w/ dedicated/shared shipped) |
-| LP-106 | Per-level capacity & layering | L | LP-100, LP-34 | [599][598] | TODO |
+| LP-106 | Per-level capacity & layering | L | LP-100, LP-34 | [599][598] | **PARTIAL** (layering w/ co-location + pack/spread shipped) |
 | LP-107 | Nested-volume reservation ledger / consensus | XL | LP-33 | [574] | **PARTIAL** (reservation ledger w/ ancestor-descendant exclusion shipped) |
 | LP-108 | Nested-volume spatial queries | L | LP-107 | [593][594] | **PARTIAL** (quadkey containment/overlap/adjacency/enclose shipped) |
 | LP-109 | LOD-across-planets | XL | LP-101 | [573][576] | TODO |
