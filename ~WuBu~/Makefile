@@ -27,7 +27,7 @@ ASSETS_SRC := src/core/wb_assets.c src/core/wb_assets_gltf.c \
 AVATAR_SRC := src/core/wb_avatar.c src/core/wb_avatar_bones.c \
               src/core/wb_avatar_gltf.c src/core/wb_avatar_anim.c \
               src/core/wb_avatar_identity.c $(ASSETS_SRC)
-CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c src/core/wb_tagheap.c src/core/wb_budget.c src/core/wb_geom.c src/core/wb_meshlet.c src/core/wb_lod.c src/core/wb_hlod.c src/core/wb_galloc.c src/core/wb_occl.c src/core/wb_bindless.c src/core/wb_stream.c src/core/wb_material.c src/core/wb_compact.c src/core/wb_taa.c src/core/wb_delta.c src/core/wb_snapshot.c src/core/wb_history.c src/core/wb_rollback.c src/core/wb_netmodel.c src/core/wb_handoff.c src/core/wb_assetgraph.c src/core/wb_match.c src/core/wb_shadervar.c src/core/wb_watch.c src/core/wb_cvar.c src/core/wb_i18n.c src/core/wb_replay.c src/core/wb_validate.c src/core/wb_cook.c src/core/wb_patch.c src/core/wb_tls.c src/core/wb_eventlog.c src/core/wb_social.c src/core/wb_catalog.c src/core/wb_moderate.c src/core/wb_agegate.c src/core/wb_ledger.c src/core/wb_fed.c src/core/wb_resv.c src/core/wb_qkey.c src/core/wb_addr.c src/core/wb_place.c src/core/wb_layer.c src/core/wb_interest.c src/core/wb_travel.c src/core/wb_lodchain.c
+CORE_SRC := src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c src/core/wb_prof.c src/core/wb_det.c src/core/wb_snap.c src/core/wb_interp.c src/core/wb_job.c src/core/wb_pool.c src/core/wb_access.c src/core/wb_frame.c src/core/wb_hive.c src/core/wb_tagheap.c src/core/wb_budget.c src/core/wb_geom.c src/core/wb_meshlet.c src/core/wb_lod.c src/core/wb_hlod.c src/core/wb_galloc.c src/core/wb_occl.c src/core/wb_bindless.c src/core/wb_stream.c src/core/wb_material.c src/core/wb_compact.c src/core/wb_taa.c src/core/wb_delta.c src/core/wb_snapshot.c src/core/wb_history.c src/core/wb_rollback.c src/core/wb_netmodel.c src/core/wb_handoff.c src/core/wb_assetgraph.c src/core/wb_match.c src/core/wb_shadervar.c src/core/wb_watch.c src/core/wb_cvar.c src/core/wb_i18n.c src/core/wb_replay.c src/core/wb_validate.c src/core/wb_cook.c src/core/wb_patch.c src/core/wb_tls.c src/core/wb_eventlog.c src/core/wb_social.c src/core/wb_catalog.c src/core/wb_moderate.c src/core/wb_agegate.c src/core/wb_ledger.c src/core/wb_fed.c src/core/wb_resv.c src/core/wb_qkey.c src/core/wb_addr.c src/core/wb_place.c src/core/wb_layer.c src/core/wb_interest.c src/core/wb_travel.c src/core/wb_lodchain.c src/core/wb_persist.c
 SCRIPT_SRC := src/lua/wb_script.c src/lua/wb_space_bind.c
 HOST_SRC := src/lua/wb_lua_host.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
@@ -50,7 +50,7 @@ run: $(TARGET)
 run-mode: $(TARGET)
 	./$(TARGET) games $(M)
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -570,6 +570,12 @@ TEST_LODCHAIN := build/wb_lodchain_test.exe
 test-lodchain: build
 	$(CC) $(CFLAGS) -Isrc/core src/core/wb_qkey.c src/core/wb_lodchain.c tests/wb_lodchain_test.c -o $(TEST_LODCHAIN)
 	./$(TEST_LODCHAIN)
+
+# test-persist: LP-102 stone 1 -- per-level persistence
+TEST_PERSIST := build/wb_persist_test.exe
+test-persist: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_qkey.c src/core/wb_persist.c tests/wb_persist_test.c -o $(TEST_PERSIST)
+	./$(TEST_PERSIST)
 
 clean:
 	rm -rf build
