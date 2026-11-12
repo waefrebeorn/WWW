@@ -83,28 +83,28 @@ static int wb_project(const wb_render_camera *cam, int W, int H,
     return 0;
 }
 
-int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
-                     const float pos[3], float radius_m, uint32_t color) {
-    int W=fb->width, H=fb->height;
-    float sx, sy, depth;
-    if (wb_project(cam, W, H, pos, &sx, &sy, &depth) != 0) return 0;
-
-    /* A sphere of radius r at view depth d subtends r/d of the half-height, so
-     * its pixel radius is (r/d) * f * H/2 with f the vertical focal length. */
-    float f = 1.0f / tanf(cam->vfov_deg * (3.14159265f/180.0f) * 0.5f);
-    float rp = (radius_m / depth) * f * (float)H * 0.5f;
-    if (!(rp > 0.5f)) return 0;
-
-    /* Depth cue: full brightness at the near plane, fading toward the far one,
-     * never below a quarter so a distant body stays visible. */
+/* Depth cue and pixel radius for a body of radius r at view depth d. Shared by
+ * the marker and the segment so the two layers shade alike. */
+static float wb_depth_brightness(const wb_render_camera *cam, float depth) {
     float b = 1.0f;
     if (cam->far_z > cam->near_z) {
         b = 1.0f - 0.75f * (depth - cam->near_z) / (cam->far_z - cam->near_z);
         if (b < 0.25f) b = 0.25f;
         if (b > 1.0f)  b = 1.0f;
     }
-    uint32_t col = shade(color, b);
+    return b;
+}
 
+static float wb_pixel_radius(const wb_render_camera *cam, int H,
+                             float radius_m, float depth) {
+    float f = 1.0f / tanf(cam->vfov_deg * (3.14159265f/180.0f) * 0.5f);
+    return (radius_m / depth) * f * (float)H * 0.5f;
+}
+
+/* Stamp one disc. Returns 1 when it landed on screen. */
+static int wb_stamp_disc(wb_framebuffer *fb, int W, int H, float sx, float sy,
+                         float rp, uint32_t col) {
+    if (!(rp > 0.5f)) return 0;
     int minx=(int)floorf(sx-rp), maxx=(int)ceilf(sx+rp);
     int miny=(int)floorf(sy-rp), maxy=(int)ceilf(sy+rp);
     if(minx<0)minx=0;
@@ -117,6 +117,49 @@ int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
         if (dx*dx+dy*dy <= r2) fb->pixels[(size_t)y*W+x]=col;
     }
     return 1;
+}
+
+int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
+                     const float pos[3], float radius_m, uint32_t color) {
+    int W=fb->width, H=fb->height;
+    float sx, sy, depth;
+    if (wb_project(cam, W, H, pos, &sx, &sy, &depth) != 0) return 0;
+    float rp = wb_pixel_radius(cam, H, radius_m, depth);
+    uint32_t col = shade(color, wb_depth_brightness(cam, depth));
+    return wb_stamp_disc(fb, W, H, sx, sy, rp, col);
+}
+
+int wb_render_segment(wb_framebuffer *fb, const wb_render_camera *cam,
+                      const float a[3], const float b[3],
+                      float width_m, uint32_t color) {
+    if (!fb || !fb->pixels || !cam) return 0;
+    int W=fb->width, H=fb->height;
+
+    /* Sample finely enough that the projected chain has no gaps: one step per
+     * screen pixel of the projected span, clamped so a long beam cannot stall a
+     * frame and a short limb still gets two samples. */
+    float ax, ay, ad, bx, by, bd;
+    if (wb_project(cam, W, H, a, &ax, &ay, &ad) != 0) return 0;
+    if (wb_project(cam, W, H, b, &bx, &by, &bd) != 0) return 0;
+    float span = sqrtf((bx-ax)*(bx-ax) + (by-ay)*(by-ay));
+    int steps = (int)span;
+    if (steps < 2) steps = 2;
+    if (steps > 64) steps = 64;
+
+    int drawn = 0;
+    float p[3];
+    for (int i = 0; i <= steps; i++) {
+        float t = (float)i / (float)steps;
+        p[0] = a[0] + (b[0]-a[0])*t;
+        p[1] = a[1] + (b[1]-a[1])*t;
+        p[2] = a[2] + (b[2]-a[2])*t;
+        float sx, sy, depth;
+        if (wb_project(cam, W, H, p, &sx, &sy, &depth) != 0) continue;
+        float rp = wb_pixel_radius(cam, H, width_m, depth);
+        uint32_t col = shade(color, wb_depth_brightness(cam, depth));
+        drawn += wb_stamp_disc(fb, W, H, sx, sy, rp, col);
+    }
+    return drawn;
 }
 
 /* one terrain plate's sample of world coordinate. Samples are grid 0..nx-1

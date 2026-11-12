@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 91 gates, 8597 assertions
+mingw32-make test       # 92 gates, 8628 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -65,6 +65,20 @@ WASD TO MOVE - SPACE TO JUMP - SHIFT TO SPRINT
 ```
 
 A mode that declares no hint shows none.
+
+### The bodies
+
+The player and every bot are **figures**, not discs: a head, a torso, two arms and
+two legs. The stride is procedural — `wb_walk` advances a phase by the distance a
+body has actually travelled, so a figure walks at the speed it is moving and holds
+its pose when it stops. No skeleton, no clip, no asset.
+
+```
+     O          head
+    /|\         shoulders, arms
+     |          torso
+    / \         legs, mid-stride
+```
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
 that Windows refuses. Create the directory once in the shell and the makefile
@@ -120,7 +134,7 @@ platform pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the
 space: what it is for, and what it refuses to be.
 
 `docs/EXPERIENCE-ASSESSMENT.md` is the companion read. It measures how much of
-the engine the shipped binary actually reaches — **21 of 95 modules** — separates
+the engine the shipped binary actually reaches — **22 of 96 modules** — separates
 the player experience from the creator experience, and proposes the validation
 mechanisms (vertical-slice gate, bot playtests, experience telemetry, the
 creator-workflow gate) that module gates cannot provide. Run

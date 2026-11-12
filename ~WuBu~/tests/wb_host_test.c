@@ -235,6 +235,21 @@ int main(void) {
         CHECK(wb_host_elapsed(h) == 0.0, "no sim time has passed yet");
         wb_host_step(h, (float)WB_HOST_FIXED_DT);
         CHECK(wb_host_elapsed(h) > 0.0, "sim time advances with the steps");
+
+        /* Animation: rendering is pure, and the walk cycle advances with the sim
+         * step rather than the frame -- a render must not be able to move it. */
+        static uint32_t r1[640 * 480], r2[640 * 480], r3[640 * 480];
+        wb_framebuffer f1 = { r1, 640, 480 };
+        wb_framebuffer f2 = { r2, 640, 480 };
+        wb_framebuffer f3 = { r3, 640, 480 };
+        wb_host_render(h, &f1);
+        wb_host_render(h, &f2);
+        CHECK(memcmp(r1, r2, sizeof r1) == 0,
+              "rendering twice without a step is byte-identical");
+        for (int i = 0; i < 5; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        wb_host_render(h, &f3);
+        CHECK(memcmp(r1, r3, sizeof r1) != 0,
+              "a sim step moves what the frame shows");
         wb_host_close(h);
     }
 

@@ -13,11 +13,13 @@
 #include "wb_space_bind.h"
 #include "wb_worldspace.h"
 #include "wb_util.h"
+#include "wb_walk.h"
 
 #include <lua.h>
 #include <lauxlib.h>
 
 #include <dirent.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +43,8 @@ struct wb_host {
     int            has_objective;
     char           hint[WB_MODE_CFG_VALUE];  /* onboarding line, from mode.json */
     double         hint_seconds;             /* how long it stays up, 0 = never */
+    wb_walk       *walks;       /* per-entity walk cycle, indexed by entity index */
+    uint32_t       nwalks;      /* allocated entries in `walks` */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -296,7 +300,95 @@ void wb_host_close(wb_host *h) {
     if (h->prof) wb_prof_dispose(h->prof);
     if (h->world) wb_world_destroy(h->world);
     if (h->ws) wb_worldspace_close(h->ws);
+    free(h->walks);
     free(h);
+}
+
+/* ---- Walk cycles --------------------------------------------------------- */
+
+/* Grow the per-entity walk table to cover every entity index. Entities are
+ * recycled, so a slot that has gone dead keeps its old phase; a respawned body
+ * starting mid-stride is not a defect worth special-casing. */
+static void wb_host_grow_walks(wb_host *h, uint32_t need) {
+    if (need <= h->nwalks) return;
+    uint32_t cap = h->nwalks ? h->nwalks : 16;
+    while (cap < need) cap *= 2;
+    wb_walk *grown = realloc(h->walks, (size_t)cap * sizeof *grown);
+    if (!grown) return;                    /* no animation rather than no host */
+    for (uint32_t i = h->nwalks; i < cap; i++)
+        wb_walk_init(&grown[i], WB_WALK_RATE_PER_METRE);
+    h->walks = grown;
+    h->nwalks = cap;
+}
+
+/* Advance every body's walk cycle by its OWN velocity, so a figure walks at the
+ * speed it is actually moving. Runs once per whole sim step, never per frame:
+ * the phase is simulation state, and a render must not be able to move it. */
+static void wb_host_advance_walks(wb_host *h, double dt) {
+    uint32_t n = wb_world_next_index(h->world);
+    if (n == 0) return;
+    wb_host_grow_walks(h, n);
+    if (!h->walks) return;
+    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_VELOCITY);
+    uint8_t *vbase = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_VELOCITY);
+    for (uint32_t i = 0; i < n; i++) {
+        double speed = 0.0;
+        if (vbase && wb_world_slot_alive(h->world, i) &&
+            wb_world_comp_present(h->world, WB_COMP_VELOCITY, i)) {
+            float *v = (float *)(vbase + (size_t)i * esz);
+            speed = sqrt((double)v[0]*v[0] + (double)v[1]*v[1] + (double)v[2]*v[2]);
+        }
+        wb_walk_step(&h->walks[i], dt, speed);
+    }
+}
+
+/* A body drawn as a figure rather than a disc: torso, two legs, two arms.
+ * EVERYTHING here is in the renderer's own space (y-up), which is what the
+ * camera `rc` and the framebuffer use -- `pos` is a body position already mapped
+ * from the world's z-up, and `right`/`forward` are the camera's axes mapped the
+ * same way. Getting that wrong lays the figure down along the view axis.
+ *
+ * `pos` is the body's feet; `walk` drives both swing terms, so a standing body
+ * stands. */
+static void wb_host_draw_figure(wb_framebuffer *fb, const wb_render_camera *rc,
+                                const float pos[3], const float right[3],
+                                const float forward[3], const wb_walk *walk,
+                                uint32_t color) {
+    /* Figure proportions, metres. A 1.8 m body. */
+    const double hip_h = 0.95, head_h = 1.75, shoulder_h = 1.45;
+    const double s  = walk ? sin(walk->phase) : 0.0;    /* the stride       */
+    const double lL = s > 0.0 ? s : 0.0;               /* left foot lifts  */
+    const double lR = s < 0.0 ? -s : 0.0;              /* right foot lifts */
+    const double bob = 0.05 * fabs(s);                 /* rises per stride */
+
+    /* Lateral along the camera's right, fore/aft along its forward, +y is up. */
+    #define PT(ox, oy, oz, out) do { \
+        out[0] = (float)(pos[0] + right[0]*(ox) + forward[0]*(oy)); \
+        out[1] = (float)(pos[1] + (oz)); \
+        out[2] = (float)(pos[2] + right[2]*(ox) + forward[2]*(oy)); \
+    } while (0)
+
+    float hip[3], head[3], sh_l[3], sh_r[3];
+    float foot_l[3], foot_r[3], hand_l[3], hand_r[3];
+    PT(0.0,  0.0,        hip_h + bob, hip);
+    PT(0.0,  0.0,        head_h + bob, head);
+    PT(-0.20, 0.0,       shoulder_h + bob, sh_l);
+    PT( 0.20, 0.0,       shoulder_h + bob, sh_r);
+    PT(-0.16,  0.22 * s, 0.02 + 0.14 * lL, foot_l);
+    PT( 0.16, -0.22 * s, 0.02 + 0.14 * lR, foot_r);
+    PT(-0.24, -0.08 * s, 0.95 + bob, hand_l);
+    PT( 0.24,  0.08 * s, 0.95 + bob, hand_r);
+    #undef PT
+
+    /* Limbs first, torso over them: a limb must never appear to pass in front of
+     * the chest. The head goes on last of all. */
+    wb_render_segment(fb, rc, hip, foot_l, 0.07f, color);          /* leg L    */
+    wb_render_segment(fb, rc, hip, foot_r, 0.07f, color);          /* leg R    */
+    wb_render_segment(fb, rc, sh_l, hand_l, 0.06f, color);         /* arm L    */
+    wb_render_segment(fb, rc, sh_r, hand_r, 0.06f, color);         /* arm R    */
+    wb_render_segment(fb, rc, sh_l, sh_r, 0.09f, color);          /* shoulders */
+    wb_render_segment(fb, rc, hip, head, 0.10f, color);           /* torso    */
+    wb_render_marker(fb, rc, head, 0.14f, color);                 /* head     */
 }
 
 int wb_host_step(wb_host *h, float dt) {
@@ -330,6 +422,9 @@ int wb_host_step(wb_host *h, float dt) {
         WB_PROF_ZONE(pr, "physics") {
             wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
         }
+        /* The walk cycle is simulation state, so it advances with the fixed step
+         * and never with the frame -- a render must not be able to move it. */
+        wb_host_advance_walks(h, WB_HOST_FIXED_DT);
         h->ticks++;
         h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
         /* The objective runs on the simulation clock, not the frame clock: it
@@ -612,6 +707,16 @@ int wb_host_render(wb_host *h, wb_framebuffer *fb) {
     rc.far_z    = 1000.0f;
 
     int drawn = 0;
+    /* The figure is built in the camera's own frame, so the stride reads from
+     * whatever angle the camera sits at. The camera's axes are world z-up and the
+     * renderer is y-up, so they are mapped the same way as the body positions. */
+    double right_w[3], forward_w[3];
+    wb_camera_right(&h->cam, right_w);
+    wb_camera_forward(&h->cam, forward_w);
+    const float right_f[3]  = { (float)right_w[0], (float)right_w[2],
+                                (float)right_w[1] };
+    const float forward_f[3] = { (float)forward_w[0], (float)forward_w[2],
+                                 (float)forward_w[1] };
     size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
     uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
     uint32_t n = wb_world_next_index(h->world);
@@ -621,9 +726,17 @@ int wb_host_render(wb_host *h, wb_framebuffer *fb) {
         float *p = (float *)(base + (size_t)i * esz);
         const float w[3] = { p[0], p[2], p[1] };       /* z-up -> y-up */
         int is_player = (i == h->player.index);
-        drawn += wb_render_marker(fb, &rc, w,
-                                  is_player ? 0.5f : 0.35f,
-                                  is_player ? 0xFFE080 : 0xC0C8D0);
+        uint32_t col = is_player ? 0xFFE080 : 0xC0C8D0;
+        /* A body with no walk state (the table could not grow) falls back to the
+         * plain marker rather than drawing nothing. */
+        if (h->walks && i < h->nwalks) {
+            wb_host_draw_figure(fb, &rc, w, right_f, forward_f,
+                                &h->walks[i], col);
+            drawn++;
+        } else {
+            drawn += wb_render_marker(fb, &rc, w,
+                                      is_player ? 0.5f : 0.35f, col);
+        }
     }
 
     /* The HUD is the last layer: it is screen-space, not world-space, so it is

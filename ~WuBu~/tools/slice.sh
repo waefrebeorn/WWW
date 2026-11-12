@@ -23,6 +23,25 @@ note() { printf '  %s\n' "$*"; }
 ok()   { printf '  ok  %s\n' "$*"; }
 bad()  { printf '  FAIL %s\n' "$*"; FAIL=1; }
 
+# Count the pixels in a box of a saved P6 frame that are NOT the sky colour.
+# The frame is 640x480 and the header is 15 bytes ("P6\n640 480\n255\n"), so a
+# pixel's bytes sit at 15 + (y*640 + x)*3. A box is read a row at a time and the
+# hex is searched for the sky triplet; the figure's colours share no adjacent
+# byte pair with it, so the count cannot be fooled by a pixel boundary.
+lit_in_box() {  # file x0 y0 x1 y1 -> count of non-sky pixels
+  local f=$1 x0=$2 y0=$3 x1=$4 y1=$5 y off len hex sky total
+  hex=""
+  for (( y=y0; y<y1; y++ )); do
+    off=$(( 15 + (y * 640 + x0) * 3 ))
+    len=$(( (x1 - x0) * 3 ))
+    hex="$hex$(tail -c +$((off + 1)) "$f" | head -c "$len" \
+                | od -An -tx1 -v | tr -d ' \n')"
+  done
+  total=$(( (x1 - x0) * (y1 - y0) ))
+  sky=$(printf '%s' "$hex" | grep -o '1a2430' | wc -l)
+  echo $(( total - sky ))
+}
+
 # ---- 1. build -------------------------------------------------------------
 mkdir -p build
 if [ ! -x build/wubu_engine.exe ]; then
@@ -149,24 +168,25 @@ else
 fi
 
 # ---- 6. render ------------------------------------------------------------
-# A frame of the world must be renderable, and it must contain the player: the
-# centre pixel of the saved frame is the player's marker, not the sky.
+# A frame of the world must be renderable, and it must contain the player. The
+# player is a FIGURE now rather than a disc, so the check is a box around the
+# frame centre rather than one pixel: the exact centre of a standing figure is
+# sky between its legs.
 note "render"
 ppm="build/frame.ppm"
 rm -f "$ppm"
 render_out="$(./build/wubu_engine.exe games duel-stadium player-1 --input fwd \
                                               --render "$ppm" 2>&1)"
-echo "$render_out" | grep -q "rendered 1 marker(s)" \
-  || bad "render: no marker reported"
+echo "$render_out" | grep -qE "rendered [1-9][0-9]* marker\(s\)" \
+  || bad "render: no body reported"
 [ -s "$ppm" ] || bad "render: no frame written"
-# The PPM header is "P6\n640 480\n255\n" = 15 bytes; the centre pixel of a
-# 640x480 frame sits at 15 + (240*640 + 320) * 3.
-off=$((15 + (240 * 640 + 320) * 3))
-centre="$(tail -c +$((off + 1)) "$ppm" | head -c 3 | od -An -tx1 | tr -d ' \n')"
-if [ "$centre" = "1a2430" ]; then
-  bad "render: centre pixel is sky -- the player was not drawn"
+# The player is drawn at the frame centre; a 60x60 box there must be mostly
+# figure, and must not be empty.
+centre_lit=$(lit_in_box "$ppm" 290 210 350 270)
+if [ "$centre_lit" -lt 20 ]; then
+  bad "render: the frame centre holds no figure ($centre_lit lit pixels)"
 else
-  ok "render: player drawn at frame centre (pixel $centre)"
+  ok "render: the player's figure is drawn at the frame centre ($centre_lit px)"
 fi
 
 # The HUD is a screen-space layer drawn after the markers: the match's state,
@@ -196,6 +216,33 @@ if [ "$hint_px" = "1a2430" ]; then
   bad "hint: nothing was drawn for onboarding (pixel is sky)"
 else
   ok "hint: onboarding line drawn at the bottom (pixel $hint_px)"
+fi
+
+# ---- 6. animation ---------------------------------------------------------
+# The bodies are figures now, not discs, and the stride is driven by each body's
+# own velocity. Two frames of a DRIVEN player therefore differ far more than two
+# frames of a player left alone, where nothing but residual velocity moves.
+#
+# The compared region is a full-width band across the figure, so it is one
+# contiguous run of the PPM and `cmp` can diff it directly -- no pixel parsing.
+anim_band() {  # file y0 y1 -> raw bytes of the full-width rows [y0,y1)
+  tail -c +$(( ($2 * 640) * 3 + 16 )) "$1" | head -c $(( ($3 - $2) * 640 * 3 ))
+}
+note "animation"
+for f in 120 131; do
+  ./build/wubu_engine.exe games duel-stadium --frames $f --input fwd \
+      --render "build/anim_fwd_$f.ppm" >/dev/null 2>&1
+  ./build/wubu_engine.exe games duel-stadium --frames $f --input none \
+      --render "build/anim_none_$f.ppm" >/dev/null 2>&1
+done
+anim_fwd=$(cmp -l <(anim_band build/anim_fwd_120.ppm 200 300) \
+                  <(anim_band build/anim_fwd_131.ppm 200 300) | wc -l)
+anim_none=$(cmp -l <(anim_band build/anim_none_120.ppm 200 300) \
+                   <(anim_band build/anim_none_131.ppm 200 300) | wc -l)
+if [ "$anim_fwd" -gt 200 ] && [ "$anim_fwd" -gt $((anim_none * 2)) ]; then
+  ok "anim: a driven player's figure changes ($anim_fwd bytes vs $anim_none undriven)"
+else
+  bad "anim: the figure barely changes under motion (driven $anim_fwd, undriven $anim_none)"
 fi
 
 # ---- 7. verdict -----------------------------------------------------------

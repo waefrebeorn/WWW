@@ -77,4 +77,18 @@ int wb_render_terrain(wb_framebuffer *fb, const wb_render_camera *cam,
 int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
                      const float pos[3], float radius_m, uint32_t color);
 
+/* Draw a world-space capsule: the set of points within `width_m` of the segment
+ * from `a` to `b`. This is the primitive a figure is built from -- a torso, a
+ * limb, a bat, a beam -- and the one the marker cannot express, because a marker
+ * is a point and a body has extent.
+ *
+ * It is drawn as a chain of discs sampled along the segment, so perspective
+ * shrinks it correctly and the near end is never fatter than the far one. Both
+ * endpoints behind the near plane draws nothing and returns 0.
+ *
+ * Returns the number of discs actually stamped. */
+int wb_render_segment(wb_framebuffer *fb, const wb_render_camera *cam,
+                      const float a[3], const float b[3],
+                      float width_m, uint32_t color);
+
 #endif /* WB_RENDER_H */

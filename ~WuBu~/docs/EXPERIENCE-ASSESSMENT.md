@@ -12,8 +12,8 @@ reproducible from the commands in §9.
 
 ## 1. TL;DR
 
-1. **The engine is a capability library, not a product.** 95 modules, 18k LOC of
-   core C11, 91 gates / 8,597 assertions, 0 fail — and **only 21 of 95 modules are
+1. **The engine is a capability library, not a product.** 96 modules, 18k LOC of
+   core C11, 92 gates / 8,628 assertions, 0 fail — and **only 22 of 96 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -42,11 +42,11 @@ reproducible from the commands in §9.
 
 | What | Number |
 |---|---|
-| Core `.c` / `.h` | 100 / 95 |
-| Core LOC | 12,300 + 5,924 = **18,224** |
+| Core `.c` / `.h` | 101 / 96 |
+| Core LOC | 12,553 + 6,007 = **18,560** |
 | Other src (`lua`, `net`, `lv`, `platform`) | 1,190 + 1,028 + 6,807 + 292 LOC |
-| Gates | **91 results / 8,597 assertions / 0 fail** |
-| Test sources | 88 |
+| Gates | **92 results / 8,628 assertions / 0 fail** |
+| Test sources | 89 |
 | Pads | 114 → **9 shipped, 48 partial, 57 todo** |
 
 ### 2.2 The wiring, measured
@@ -62,10 +62,10 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **21 of 95 modules are reachable from the shipped path.**
+> **22 of 96 modules are reachable from the shipped path.**
 > `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_hud, wb_input,
 > wb_interp, wb_json, wb_lua_host, wb_mode, wb_objective, wb_prof, wb_render,
-> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_walk, wb_worldspace`
 
 Everything else — `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_edit`, `wb_heightfield`,
@@ -503,8 +503,25 @@ kerning, no ligatures, no bidi, no non-Latin script — everything non-Latin sta
 blocked on real shaping), no layout or containers, no retained widget tree and no
 focus chain. An immediate-mode stack is the next stone.
 
-  What remains in this phase is the rest of the loop: **animation and audio**
-  (nothing moves or sounds yet — the marker is a billboard), and the rest of
+**Animation is shipped.** The bodies are figures, not discs: a torso, two legs,
+two arms and a head, drawn with a new world-space capsule primitive
+(`wb_render_segment`) — the one primitive a marker cannot express, because a
+marker is a point and a body has extent. The stride is *procedural*: `wb_walk`
+advances a phase by the distance a body has actually travelled, so a figure walks
+at the speed it is moving and holds its pose when it stops. No skeleton, no clip,
+no asset — which is why it can exist before the content pipeline does.
+
+The figure is built in the **camera's** frame, so the stride reads from whatever
+angle the camera sits at rather than only from behind. The camera's axes are
+world z-up and the renderer is y-up, so both are mapped the same way as the body
+positions; getting that wrong lays the figure down along the view axis, which is
+exactly what the first draft did.
+
+The walk cycle is simulation state: it advances once per whole fixed step and
+never per frame, so a render cannot move it. `test-host` asserts that two renders
+with no step between are byte-identical and that a step changes the frame.
+
+  What remains in this phase is **audio** (nothing sounds yet) and the rest of
   **UI** (`LP-42`: a widget stack, layout, a focus chain, and real text shaping).
 
 **Onboarding is shipped.** A first-time player is now told what to do, and the
@@ -708,7 +725,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 91 gate results / 8,597 assertions / 0 fail
+mingw32-make test            # 92 gate results / 8,628 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

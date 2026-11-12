@@ -118,6 +118,55 @@ int main(void){
     int m3=wb_render_marker(&fb,&c2,aside,0.5f,0xFFE080);
     CHECK(m3==0, "marker outside the frustum is not drawn");
 
+    /* ---- a capsule: the primitive a body is made of ---------------------- */
+    /* A marker is a point; a torso, a limb, a bat and a beam all have extent.
+     * The capsule is the smallest thing that can express that. */
+    wb_render_clear(&fb,bg);
+    float a1[3]={8.0f,0.0f,0.0f}, b1[3]={8.0f,0.0f,4.0f};   /* vertical, 4 m */
+    int s1=wb_render_segment(&fb,&c2,a1,b1,0.10f,0xFFE080);
+    CHECK(s1>0, "a segment in view is drawn");
+    uint32_t seg_px=count_painted(&fb,bg);
+    CHECK(seg_px>20, "a segment covers a band, not a single pixel");
+
+    /* It is a band of roughly the right size: a 4 m capsule at that camera is a
+     * few hundred pixels, not one and not the whole frame. */
+    CHECK(seg_px < W*H/4, "a segment does not flood the framebuffer");
+
+    /* A segment lies along its axis: it must be TALLER than it is wide. */
+    int minx=W,maxx=-1,miny=H,maxy=-1;
+    for(int y=0;y<H;y++)for(int x=0;x<W;x++)
+        if(fb.pixels[y*W+x]!=bg){
+            if(x<minx) minx=x;
+            if(x>maxx) maxx=x;
+            if(y<miny) miny=y;
+            if(y>maxy) maxy=y;
+        }
+    CHECK(maxy-miny > maxx-minx, "a vertical capsule is taller than it is wide");
+
+    /* Zero width draws nothing: there is no capsule of zero thickness. */
+    wb_render_clear(&fb,bg);
+    int s0=wb_render_segment(&fb,&c2,a1,b1,0.0f,0xFFE080);
+    CHECK(s0==0, "a zero-width segment draws nothing");
+
+    /* A point segment (both ends equal) is a marker, not a line. */
+    wb_render_clear(&fb,bg);
+    int s2=wb_render_segment(&fb,&c2,a1,a1,0.10f,0xFFE080);
+    CHECK(s2>0, "a degenerate segment still draws a dot");
+
+    /* Behind the near plane: nothing, and no fault. */
+    wb_render_clear(&fb,bg);
+    float a3[3]={8.0f,0.0f,0.0f}, b3[3];
+    b3[0]=2.0f*c2.eye[0]-c2.at[0];
+    b3[1]=2.0f*c2.eye[1]-c2.at[1];
+    b3[2]=2.0f*c2.eye[2]-c2.at[2];
+    int s3=wb_render_segment(&fb,&c2,a3,b3,0.10f,0xFFE080);
+    CHECK(s3==0, "a segment behind the near plane is not drawn");
+
+    /* A NULL framebuffer is harmless. */
+    wb_framebuffer nil={NULL,0,0};
+    wb_render_segment(&nil,&c2,a1,b1,0.10f,0xFFE080);
+    CHECK(1, "a NULL framebuffer is harmless");
+
     printf("=== RENDER TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }
