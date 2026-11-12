@@ -78,7 +78,8 @@ run_case "omniverse-hub" \
 
 run_case "duel-stadium" \
   "in 'duel-stadium' as player-1" \
-  "engine exited clean"
+  "engine exited clean" \
+  "objective won, score 0-3"
 
 # ---- 4. determinism -------------------------------------------------------
 # LP-03's contract, checked on the shipped path: identical runs must produce an
@@ -128,6 +129,24 @@ move_case fwd moved
 move_case back moved
 move_case left moved
 move_case none still
+
+# ---- 5b. objective --------------------------------------------------------
+# The duel must complete a loop with a result: a bot plays it to a score, the
+# objective resolves, and the host ends the match on the resolution rather than
+# on a tick count. This is the player-loop criterion from the assessment.
+note "objective"
+obj_out="$(./build/wubu_engine.exe games duel-stadium 2>&1)"
+if printf '%s\n' "$obj_out" | grep -qF "objective won, score 0-3"; then
+  ok "duel: a full loop completed with a result (0-3)"
+else
+  bad "duel: the match did not resolve"
+  printf '%s\n' "$obj_out" | sed 's/^/       /'
+fi
+if printf '%s\n' "$obj_out" | grep -qF "bot tags player-1"; then
+  ok "duel: the bot scored through the script's objective binding"
+else
+  bad "duel: the bot never scored"
+fi
 
 # ---- 6. render ------------------------------------------------------------
 # A frame of the world must be renderable, and it must contain the player: the

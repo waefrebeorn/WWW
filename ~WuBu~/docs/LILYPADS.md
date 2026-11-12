@@ -707,6 +707,9 @@ No gate checks AGI-authored places against the source DEM, reservation/containme
 ### LP-113 — Per-volume capacity / quotas
 Reservation models have capacity (Agones counters/lists, Second Life prim allowances, AWS AZ capacity) but WWW has no capacity model for nested volumes (stadium/patch/city/planet). *[574][585][584]* · **Size L**
 
+### LP-114 — Match objective (score, clock, result)
+**A gap pad, not a corpus pad.** The inventory had no objective, score, timer or win/lose pad at all, which is why Phase 2's "objective" stage had nothing to build on: the shipped modes ran for a fixed tick count and stopped, with nothing to win, lose or be scored on. This pad is the smallest honest version — a score per side, a clock that advances only when the simulation does, and a result of won / lost / drawn under three rules (first-to, timed, survive). The host owns it and ends the match when it resolves; the mode's script declares it in `mode.json` and plays toward it. No corpus source: the design follows what the shipped modes needed. · **Size M**
+
 ---
 
 ## Accepted risk — not a pad
@@ -736,7 +739,7 @@ exists as a note, not as work.
   Only the build key is missing.
 - **Declared spawns in `mode.json`.** Data before scripts — this is what makes
   cross-gametype travel work.
-- **The gate discipline.** 89 gates, 8479 assertions, 0 fail. Every pad adds
+- **The gate discipline.** 90 gates, 8544 assertions, 0 fail. Every pad adds
   one.
 
 ---

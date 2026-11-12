@@ -74,11 +74,19 @@ static void push_v3(lua_State *L, const float *v) {
     for (int i = 0; i < 3; i++) { lua_pushnumber(L, v[i]); lua_rawseti(L, -2, i + 1); }
 }
 static void read_v3(lua_State *L, int idx, float *out) {
-    for (int i = 1; i <= 3; i++) {
-        lua_rawgeti(L, idx, i);
-        out[i - 1] = (float)lua_tonumber(L, -1);
-        lua_pop(L, 1);
+    /* Accept either a table {x,y,z} or three numbers at idx, idx+1, idx+2.
+     * lua_rawgeti on a non-table is undefined behaviour, and a script author
+     * naturally writes wb.set_vel(e, x, y, z) -- so both forms must work. */
+    if (lua_istable(L, idx)) {
+        for (int i = 1; i <= 3; i++) {
+            lua_rawgeti(L, idx, i);
+            out[i - 1] = (float)lua_tonumber(L, -1);
+            lua_pop(L, 1);
+        }
+        return;
     }
+    for (int i = 0; i < 3; i++)
+        out[i] = (float)lua_tonumber(L, idx + i);
 }
 static wb_world *get_world(lua_State *L) {
     lua_getfield(L, LUA_REGISTRYINDEX, WB_META_WORLD);

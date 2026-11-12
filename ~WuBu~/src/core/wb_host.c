@@ -36,6 +36,8 @@ struct wb_host {
     wb_character   ch;          /* player controller */
     wb_character_body body;     /* the player's body, over the ECS */
     wb_host_keys   keys;        /* key map */
+    wb_objective   objective;   /* the match objective (LP-114), if any */
+    int            has_objective;
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -203,6 +205,10 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
         snprintf(h->err, sizeof h->err, "cannot install the space bindings");
         goto fail;
     }
+    /* The objective and config bindings go in BEFORE the entry script runs: a
+     * mode reads its own tuning at load time, and it would otherwise see a nil
+     * wb.cfg. */
+    wb_host_install_bindings(h->L, h);
 
     /* Run the entry script FIRST: it declares the mode's spawns and stadiums,
      * and only then can a player be put into the world. */
@@ -242,6 +248,30 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
     }
 
     snprintf(h->mode, sizeof h->mode, "%s", gamemode);
+
+    /* The objective comes from the mode's own manifest, through the config
+     * schema like every other mode parameter -- data before scripts. A rule of
+     * 0 (or a mode that declares no objective) means the mode runs until its
+     * script says stop, exactly as before. */
+    const wb_mode_manifest *mf = wb_worldspace_mode(h->ws, gamemode);
+    if (mf) {
+        wb_mode_config cfg;
+        wb_mode_config_defaults(mf, &cfg);
+        int rule = wb_mode_config_get_int(mf, &cfg, "objective_rule", 0);
+        if (rule > 0) {
+            uint32_t sides  = (uint32_t)wb_mode_config_get_int(
+                                  mf, &cfg, "objective_sides", 2);
+            uint32_t target = (uint32_t)wb_mode_config_get_int(
+                                  mf, &cfg, "objective_target", 3);
+            double limit = wb_mode_config_get_float(
+                               mf, &cfg, "objective_time_limit", 60.0);
+            if (wb_host_set_objective(h, rule, sides, target, limit) != 0) {
+                snprintf(h->err, sizeof h->err, "%s", "bad objective");
+                goto fail;
+            }
+        }
+    }
+
     h->err[0] = 0;
     return h;
 
@@ -293,6 +323,11 @@ int wb_host_step(wb_host *h, float dt) {
         }
         h->ticks++;
         h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
+        /* The objective runs on the simulation clock, not the frame clock: it
+         * advances once per whole step by exactly one fixed step's worth, so a
+         * match replays identically however the caller paces its frames. */
+        if (h->has_objective)
+            wb_objective_step(&h->objective, WB_HOST_FIXED_DT);
     }
     wb_prof_zone_end(pr, "frame");
     h->alpha = wb_interp_alpha(wb_det_fixed_remainder(&h->acc), WB_HOST_FIXED_DT);
@@ -329,6 +364,145 @@ int wb_host_prof_summary(wb_host *h, const char *name, wb_prof_stat *out) {
 
 unsigned long wb_host_prof_overruns(const wb_host *h) {
     return (h && h->prof) ? wb_prof_total_overruns(h->prof) : 0;
+}
+
+/* ---- The match objective (LP-114) ---------------------------------------- */
+
+/* The script's side of the objective. The host owns the state, so these
+ * closures capture the host rather than reading a world pointer from the
+ * registry the way the entity bindings do. A mode scores a point with
+ * wb.objective_score(side, points) and reads the clock back; it never has to
+ * know the rule or the target, which is the host's business. */
+static int l_obj_score(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    uint32_t side = (uint32_t)luaL_checkinteger(L, 1);
+    uint32_t points = (uint32_t)luaL_checkinteger(L, 2);
+    lua_pushinteger(L, wb_host_score(h, side, points));
+    return 1;
+}
+static int l_obj_death(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    uint32_t side = (uint32_t)luaL_checkinteger(L, 1);
+    lua_pushinteger(L, wb_host_death(h, side));
+    return 1;
+}
+static int l_obj_state(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushinteger(L, wb_host_objective_state(h));
+    return 1;
+}
+static int l_obj_score_of(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    uint32_t side = (uint32_t)luaL_checkinteger(L, 1);
+    lua_pushinteger(L, (lua_Integer)wb_host_objective_score_of(h, side));
+    return 1;
+}
+static int l_obj_clock(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushnumber(L, wb_host_objective_clock(h));
+    return 1;
+}
+static int l_obj_winner(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    lua_pushinteger(L, wb_host_objective_winner(h));
+    return 1;
+}
+
+/* A mode's own tuning, read from its manifest's config schema. This is what
+ * makes the numbers in mode.json load-bearing rather than decorative: the
+ * script asks, the host answers, and the schema's default is the fallback. */
+static int l_cfg(lua_State *L) {
+    wb_host *h = (wb_host *)lua_touserdata(L, lua_upvalueindex(1));
+    const char *name = luaL_checkstring(L, 1);
+    double dflt = luaL_optnumber(L, 2, 0.0);
+    const wb_mode_manifest *mf =
+        (h && h->ws) ? wb_worldspace_mode(h->ws, h->mode) : NULL;
+    if (!mf) { lua_pushnumber(L, dflt); return 1; }
+    wb_mode_config cfg;
+    wb_mode_config_defaults(mf, &cfg);
+    int is_int = 0;
+    for (int i = 0; i < mf->ncfgs; i++)
+        if (strcmp(mf->cfgs[i].name, name) == 0) {
+            is_int = (mf->cfgs[i].type == WB_MODE_CFG_INT);
+            break;
+        }
+    double v = is_int ? (double)wb_mode_config_get_int(mf, &cfg, name, (int)dflt)
+                      : wb_mode_config_get_float(mf, &cfg, name, dflt);
+    lua_pushnumber(L, v);
+    return 1;
+}
+
+void wb_host_install_bindings(lua_State *L, wb_host *h) {
+    if (!L || !h) return;
+    lua_getglobal(L, "wb");
+    if (!lua_istable(L, -1)) { lua_pop(L, 1); return; }
+    static const struct { const char *name; lua_CFunction fn; } kObj[] = {
+        { "cfg",               l_cfg        },
+        { "objective_score",   l_obj_score   },
+        { "objective_death",   l_obj_death   },
+        { "objective_state",   l_obj_state   },
+        { "objective_score_of",l_obj_score_of},
+        { "objective_clock",   l_obj_clock   },
+        { "objective_winner",  l_obj_winner  },
+    };
+    for (size_t i = 0; i < sizeof kObj / sizeof kObj[0]; i++) {
+        lua_pushlightuserdata(L, h);
+        lua_pushcclosure(L, kObj[i].fn, 1);
+        lua_setfield(L, -2, kObj[i].name);
+    }
+    lua_pop(L, 1);
+}
+
+int wb_host_set_objective(wb_host *h, int rule, uint32_t sides,
+                          uint32_t target, double limit_s) {
+    if (!h) return -1;
+    if (wb_objective_init(&h->objective, rule, sides, target, limit_s,
+                           h->err, sizeof h->err) != 0)
+        return -1;
+    h->has_objective = 1;
+    h->err[0] = 0;
+    return 0;
+}
+
+int wb_host_score(wb_host *h, uint32_t side, uint32_t points) {
+    if (!h || !h->has_objective) return WB_OBJ_ONGOING;
+    return wb_objective_score(&h->objective, side, points);
+}
+
+int wb_host_death(wb_host *h, uint32_t side) {
+    if (!h || !h->has_objective) return WB_OBJ_ONGOING;
+    return wb_objective_death(&h->objective, side);
+}
+
+const wb_objective *wb_host_objective(const wb_host *h) {
+    return (h && h->has_objective) ? &h->objective : NULL;
+}
+
+int wb_host_objective_state(const wb_host *h) {
+    return (h && h->has_objective) ? wb_objective_state(&h->objective)
+                                   : WB_OBJ_ONGOING;
+}
+
+int wb_host_objective_winner(const wb_host *h) {
+    return (h && h->has_objective) ? wb_objective_winner(&h->objective) : -1;
+}
+
+uint32_t wb_host_objective_score_of(const wb_host *h, uint32_t side) {
+    return (h && h->has_objective) ? wb_objective_score_of(&h->objective, side) : 0;
+}
+
+double wb_host_objective_clock(const wb_host *h) {
+    return (h && h->has_objective) ? wb_objective_clock(&h->objective) : 0.0;
+}
+
+const char *wb_host_objective_state_name(const wb_host *h) {
+    if (!h || !h->has_objective) return "none";
+    switch (wb_objective_state(&h->objective)) {
+    case WB_OBJ_WON:     return "won";
+    case WB_OBJ_LOST:    return "lost";
+    case WB_OBJ_DRAW:    return "draw";
+    default:             return "ongoing";
+    }
 }
 
 /* ---- Input and the player controller ------------------------------------- */
@@ -428,5 +602,9 @@ int wb_host_running(wb_host *h) {
     lua_getfield(h->L, -1, "running");
     int running = lua_isnil(h->L, -1) ? 1 : lua_toboolean(h->L, -1);
     lua_pop(h->L, 2);
+    /* A finished objective ends the match. The mode's script does not have to
+     * know the score or the clock -- that is the point of having a match clock:
+     * the host stops when the match is over, not when a tick counter says so. */
+    if (h->has_objective && wb_objective_is_final(&h->objective)) return 0;
     return running;
 }

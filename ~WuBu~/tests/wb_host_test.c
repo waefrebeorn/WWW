@@ -74,7 +74,13 @@ static const char *kStadiumJson =
     "  \"entry\": \"main.lua\",\n"
     "  \"max_players\": 64,\n"
     "  \"teams\": 2,\n"
-    "  \"spawns\": [ { \"pos\": [50, 0, 50], \"team\": -1, \"tag\": \"landing\" } ]\n"
+    "  \"spawns\": [ { \"pos\": [50, 0, 50], \"team\": -1, \"tag\": \"landing\" } ],\n"
+    "  \"config\": [\n"
+    "    { \"name\": \"objective_rule\", \"type\": \"int\", \"min\": 0, \"max\": 3, \"default\": \"1\" },\n"
+    "    { \"name\": \"objective_target\", \"type\": \"int\", \"min\": 1, \"max\": 100, \"default\": \"10\" },\n"
+    "    { \"name\": \"objective_time_limit\", \"type\": \"float\", \"min\": 0, \"max\": 3600, \"default\": \"120\" },\n"
+    "    { \"name\": \"objective_sides\", \"type\": \"int\", \"min\": 2, \"max\": 8, \"default\": \"2\" }\n"
+    "  ]\n"
     "}\n";
 
 static const char *kStadiumLua =
@@ -169,6 +175,60 @@ int main(void) {
 
     h = wb_host_open("build/host", "", "P1", -1, err, sizeof err);
     CHECK(h == NULL, "an empty gametype name is refused");
+
+    /* ---- the objective the mode declares -----------------------------------
+     * duel-stadium declares one in its mode.json; omniverse-hub does not. The
+     * host's job is to install it, step it on the sim clock, stop the match when
+     * it resolves, and answer the script's reads. */
+    h = wb_host_open("build/host", "duel-stadium", "P1", -1, err, sizeof err);
+    CHECK(h != NULL, "the stadium opens with its objective");
+    if (h) {
+        CHECK(wb_host_objective(h) != NULL,
+              "the mode's declared objective is installed");
+        CHECK(wb_host_objective_state(h) == WB_OBJ_ONGOING,
+              "the objective starts ongoing");
+        CHECK(wb_host_objective_state_name(h) != NULL &&
+              strcmp(wb_host_objective_state_name(h), "ongoing") == 0,
+              "the state has a name");
+        CHECK(wb_host_objective_clock(h) > 0.0,
+              "the objective has time on the clock");
+
+        /* Scoring runs through the host, and a finished match ends the host. */
+        wb_host_score(h, 1, 1);
+        CHECK(wb_host_objective_score_of(h, 1) == 1,
+              "a point scored through the host is recorded");
+        CHECK(wb_host_objective_state(h) == WB_OBJ_ONGOING,
+              "one point is not the target");
+
+        /* The host stops when the objective resolves, whatever the script says:
+         * the match clock is not the script's business. */
+        wb_host_score(h, 1, 9);
+        CHECK(wb_host_objective_state(h) == WB_OBJ_WON,
+              "the target resolves the objective");
+        CHECK(wb_host_objective_winner(h) == 1, "the scoring side won");
+        CHECK(wb_host_running(h) == 0,
+              "a resolved objective stops the host");
+
+        /* And a bad objective is refused rather than half-installed. */
+        CHECK(wb_host_set_objective(h, 99, 2, 1, 0.0) == -1,
+              "an unknown rule is refused");
+        wb_host_close(h);
+    }
+
+    /* A mode with no objective behaves exactly as before: no clock, no result,
+     * and the host keeps running until the script says stop. */
+    h = wb_host_open("build/host", "omniverse-hub", "P1", -1, err, sizeof err);
+    CHECK(h != NULL, "the hub opens");
+    if (h) {
+        CHECK(wb_host_objective(h) == NULL, "a mode without an objective has none");
+        CHECK(wb_host_objective_state(h) == WB_OBJ_ONGOING,
+              "with no objective there is nothing to resolve");
+        CHECK(wb_host_objective_winner(h) == -1, "no winner without an objective");
+        CHECK(strcmp(wb_host_objective_state_name(h), "none") == 0,
+              "the state name says none");
+        CHECK(wb_host_running(h) == 1, "the host still runs");
+        wb_host_close(h);
+    }
 
     printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 89 gates, 8479 assertions
+mingw32-make test       # 90 gates, 8544 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -24,6 +24,21 @@ mingw32-make play       # the same, in a window, driven by the keyboard
 ./build/wubu_engine.exe games duel-stadium --render out.ppm       # draw a frame
 ./build/wubu_engine.exe games duel-stadium --window --frames 60   # window, 60 frames
 ```
+
+A mode may declare a **match objective** in its `mode.json` config (`objective_rule`
+1=first-to, 2=timed, 3=survive, plus `objective_target`, `objective_time_limit` and
+`objective_sides`). The host owns it: it advances the clock once per fixed step
+and ends the match when the objective resolves, so the mode's script neither
+counts ticks nor holds a score. Its entry script plays toward it:
+
+```lua
+wb.objective_score(1, 1)          -- a point for side 1
+wb.objective_score_of(0)          -- read the score back
+wb.objective_clock()              -- seconds left
+```
+
+`duel-stadium` is the worked example: an opponent walks at you and tags on
+contact, first to three takes it. `make slice` asserts the match resolves.
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
 that Windows refuses. Create the directory once in the shell and the makefile
@@ -79,11 +94,11 @@ platform pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the
 space: what it is for, and what it refuses to be.
 
 `docs/EXPERIENCE-ASSESSMENT.md` is the companion read. It measures how much of
-the engine the shipped binary actually reaches — **11 of 92 modules** — separates
+the engine the shipped binary actually reaches — **20 of 94 modules** — separates
 the player experience from the creator experience, and proposes the validation
 mechanisms (vertical-slice gate, bot playtests, experience telemetry, the
 creator-workflow gate) that module gates cannot provide. Run
-`python3 tools/wiring_report.py` to reproduce the wiring and reachability numbers.
+`python tools/wiring_report.py` to reproduce the wiring and reachability numbers.
 
 A gametype is a declared, parameterisable package (`mode.json` + an entry
 script + a typed config schema). The engine knows modes, configs, spawns and

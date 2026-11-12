@@ -28,6 +28,7 @@
 #include "wb_character.h"
 #include "wb_input.h"
 #include "wb_mode.h"
+#include "wb_objective.h"
 #include "wb_prof.h"
 #include "wb_render.h"
 #include "wb_worldspace.h"
@@ -35,6 +36,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* The host installs a few closures into the mode's script state. lua_State is
+ * only ever handled opaquely here, so it is declared rather than dragging lua.h
+ * into everything that includes this header. */
+typedef struct lua_State lua_State;
 
 typedef struct wb_host wb_host;
 
@@ -87,6 +93,32 @@ uint64_t wb_host_digest(const wb_host *h);
 /* Render-interpolation alpha in [0,1) from the accumulator's remainder. The sim
  * state is never interpolated -- only what a renderer would draw. */
 float wb_host_render_alpha(const wb_host *h);
+
+/* ------------------------------------------------------------ objective */
+
+/* Install the match objective the mode declared. `rule` is one of
+ * WB_OBJ_FIRST_TO / WB_OBJ_TIMED / WB_OBJ_SURVIVE; `limit_s` is the time limit
+ * in seconds (0 = none, which only FIRST_TO accepts); `target` is the FIRST_TO
+ * score. Returns 0 on success, -1 on refusal (see wb_host_error).
+ *
+ * A mode with no objective runs until its script says otherwise -- the objective
+ * is the match clock, not a replacement for it. */
+int wb_host_set_objective(wb_host *h, int rule, uint32_t sides,
+                          uint32_t target, double limit_s);
+
+/* Add the objective half of the script's `wb.*` surface. Call after the mode's
+ * entry script has run and the player has been spawned. */
+void wb_host_install_bindings(lua_State *L, wb_host *h);
+
+int wb_host_score(wb_host *h, uint32_t side, uint32_t points);
+int wb_host_death(wb_host *h, uint32_t side);
+
+const wb_objective *wb_host_objective(const wb_host *h);
+int  wb_host_objective_state(const wb_host *h);
+int  wb_host_objective_winner(const wb_host *h);
+uint32_t wb_host_objective_score_of(const wb_host *h, uint32_t side);
+double   wb_host_objective_clock(const wb_host *h);
+const char *wb_host_objective_state_name(const wb_host *h);
 
 /* The frame profiler (LP-01), covering every host step. Valid for the host's
  * lifetime; the caller must not dispose it. */

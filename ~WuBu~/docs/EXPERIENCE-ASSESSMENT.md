@@ -12,8 +12,8 @@ reproducible from the commands in §9.
 
 ## 1. TL;DR
 
-1. **The engine is a capability library, not a product.** 93 modules, 17k LOC of
-   core C11, 89 gates / 8,479 assertions, 0 fail — and **only 19 of 93 modules are
+1. **The engine is a capability library, not a product.** 94 modules, 18k LOC of
+   core C11, 90 gates / 8,544 assertions, 0 fail — and **only 20 of 94 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -42,12 +42,12 @@ reproducible from the commands in §9.
 
 | What | Number |
 |---|---|
-| Core `.c` / `.h` | 97 / 92 |
-| Core LOC | 11,453 + 5,553 = **17,006** |
-| Other src (`lua`, `net`, `lv`) | 1,053 + 1,028 + 6,807 LOC |
-| Gates | **89 results / 8,479 assertions / 0 fail** |
-| Test sources | 86 |
-| Pads | 113 → **9 shipped, 47 partial, 57 todo** |
+| Core `.c` / `.h` | 99 / 94 |
+| Core LOC | 12,131 + 5,851 = **17,982** |
+| Other src (`lua`, `net`, `lv`, `platform`) | 1,190 + 1,028 + 6,807 + 292 LOC |
+| Gates | **90 results / 8,544 assertions / 0 fail** |
+| Test sources | 87 |
+| Pads | 114 → **9 shipped, 48 partial, 57 todo** |
 
 ### 2.2 The wiring, measured
 
@@ -62,10 +62,10 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **19 of 93 modules are reachable from the shipped path.**
+> **20 of 94 modules are reachable from the shipped path.**
 > `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_input,
-> wb_interp, wb_json, wb_lua_host, wb_mode, wb_prof, wb_render, wb_script,
-> wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> wb_interp, wb_json, wb_lua_host, wb_mode, wb_objective, wb_prof, wb_render,
+> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
 Everything else — `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_edit`, `wb_heightfield`,
@@ -442,7 +442,10 @@ Done so far:
   no terrain, so the entity layer is what "a frame of the world" means. The
   renderer gained `wb_render_marker` for it, covered by six new checks in the
   render gate. `--render out.ppm` writes the frame, and `make slice` asserts the
-  centre pixel is the player. Reachability moved from 11 to 19 of 93.
+  centre pixel is the player. Reachability moved from 11 to 19 of 93. The
+  platform layer (`src/platform/wb_win32.{h,c}`) then took it to 20 of 94: a real
+  window, GDI presentation of an XRGB8888 DIB section, and OS events into the
+  host's `wb_input`, so `--window` opens a window a person can drive.
 
 - **The platform layer exists and is wired in.** `src/platform/wb_win32.{h,c}` is
   the first file in the repo that knows what an OS is: a window whose client area
@@ -462,7 +465,34 @@ Done so far:
 ### Phase 2 — The player loop
 Add the missing stages: **objective** (win/lose/score/timer), **onboarding**,
 **animation and audio** (all of P2, currently 0/10), **UI/HUD** (`LP-42`).
-- **Exit:** a bot completes a full loop with an objective, and M2/M3 pass on it.
+
+**The objective is shipped (LP-114).** `wb_objective` is a deterministic match
+clock: a score per side, a clock that advances only when the simulation does,
+and a result of won / lost / drawn. Three rules — first-to, timed (highest score
+at the limit, level is a draw), and survive (sides with no deaths at the limit).
+It refuses nonsense: an unknown rule, a one-sided objective, a zero target, a zero
+time limit on a timed rule, an out-of-range side.
+
+The host owns it, not the script. `duel-stadium` declares its objective in
+`mode.json` through the config schema; `wb_host_open` installs it; `wb_host_step`
+advances it by exactly one fixed step per sim tick; and `wb_host_running` returns
+false once it resolves. The mode's script neither counts ticks nor holds a score
+— it plays toward the objective through `wb.objective_score(side, points)` and
+reads the clock back. The script's tuning is data too, read through `wb.cfg`.
+
+`duel-stadium` is now a real loop: an opponent body walks at the player and tags
+on contact, first to three takes it. With no input the bot wins 0-3 in 176 ticks;
+with `--input fwd` the player runs, the bot never catches up, and the match is a
+0-0 draw at the limit. Both are a completed loop with an objective, which is the
+phase's exit criterion. `make slice` asserts the resolution and the bot's scoring
+line, and `test-objective` covers the rules and refusals.
+
+- **Exit:** met. A bot completes a full loop with an objective, on the shipped
+  path, with a deterministic digest (`duel-stadium` = `f11c863a100e5101`).
+  What remains in this phase is the rest of the loop: **onboarding** (a first-time
+  player is told what to do), **animation and audio** (nothing moves or sounds
+  yet — the marker is a billboard), and **UI/HUD** (`LP-42`: the score exists but
+  nothing on screen shows it).
 
 ### Phase 3 — The creator loop
 **Validation feedback** (M4), **hot reload**, **publish**, **creator analytics**
@@ -650,7 +680,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 89 gate results / 8,479 assertions / 0 fail
+mingw32-make test            # 90 gate results / 8,544 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

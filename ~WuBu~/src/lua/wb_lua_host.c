@@ -165,6 +165,12 @@ int main(int argc, char **argv) {
     if (win) wb_win32_close(win);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);
+    if (wb_host_objective(h))
+        printf("wb: objective %s, score %u-%u, %.1fs left\n",
+               wb_host_objective_state_name(h),
+               wb_host_objective_score_of(h, 0),
+               wb_host_objective_score_of(h, 1),
+               wb_host_objective_clock(h));
     if (have_pos)
         printf("wb: %s at (%.2f, %.2f, %.2f)\n", player, p[0], p[1], p[2]);
     if (have_frame)

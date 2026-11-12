@@ -208,6 +208,7 @@ for AGI. Cross-cutting: it refines the quadkey spine rather than forking it.
 | LP-111 | Streaming planetary terrain | XL | LP-43 | [622] | TODO |
 | LP-112 | AGI-authored place validation | L | LP-110 | [618] | **PARTIAL** (publish gate: structure, containment, DEM, reservation, license shipped) |
 | LP-113 | Per-volume capacity / quotas | L | LP-107 | [574][585][584] | **PARTIAL** (capacity along the ancestor chain + per-holder subtree quotas shipped) |
+| LP-114 | Match objective (score, clock, result) | M | LP-42 | — (gap pad; no corpus entry) | **PARTIAL** (first-to / timed / survive, host-owned match clock, script bindings shipped; HUD and onboarding remain) |
 
 ---
 

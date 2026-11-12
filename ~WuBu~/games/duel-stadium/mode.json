@@ -1,12 +1,23 @@
 {
   "name": "duel-stadium",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "waefrebeorn",
   "entry": "main.lua",
-  "description": "a stadium game space you step into",
+  "description": "a stadium duel you step into: first to three tags takes it",
   "max_players": 64,
   "teams": 2,
   "spawns": [
-    { "pos": [0, 0, 0], "team": -1, "tag": "landing" }
+    { "pos": [0, 0, 0], "team": -1, "tag": "landing" },
+    { "pos": [-4, 0, 0], "team": 0, "tag": "home" },
+    { "pos": [4, 0, 0], "team": 1, "tag": "away" }
+  ],
+  "config": [
+    { "name": "objective_rule", "type": "int", "min": 0, "max": 3, "default": "1" },
+    { "name": "objective_target", "type": "int", "min": 1, "max": 100, "default": "3" },
+    { "name": "objective_time_limit", "type": "float", "min": 0, "max": 3600, "default": "120" },
+    { "name": "objective_sides", "type": "int", "min": 2, "max": 8, "default": "2" },
+    { "name": "bot_speed", "type": "float", "min": 0, "max": 20, "default": "2" },
+    { "name": "tag_radius", "type": "float", "min": 0.1, "max": 10, "default": "1.2" },
+    { "name": "tag_cooldown_ticks", "type": "int", "min": 1, "max": 600, "default": "45" }
   ]
 }
