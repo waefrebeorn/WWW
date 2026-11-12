@@ -30,8 +30,9 @@ reproducible from the commands in §9.
    modules exist. They are not connected to each other or to an experience, and
    nothing checks that an experience works.
 6. **Two pieces of architectural debt are already visible:** two incompatible
-   quadkey representations (fixed in the linker, not unified), and a dead
-   abstraction (`wb_exp`) still linked into the binary.
+   quadkey representations (fixed in the linker, not unified), and a
+   determinism cluster — `wb_snap`, `wb_interp`, `wb_prof`, `wb_det` — that is
+   reachable only through `wb_exp`, an abstraction the shipped host never calls.
 
 ---
 
@@ -72,9 +73,13 @@ Everything else — `wb_render`, `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 
 ### 2.3 Dead and duplicated
 
-- **`wb_exp` is dead.** The "experience container — one Lua state + ECS each" is
-  referenced by nothing outside `wb_exp.c` and `tests/wb_exp_test.c`. Instance
-  management moved to `wb_dist`; `wb_exp.o` is still linked into every binary.
+- **`wb_exp` is unreachable, and it is load-bearing for a shipped pad.** The
+  "experience container" is referenced by nothing outside `wb_exp.c` and its
+  test — instance management moved to `wb_dist`. But it is also the *only*
+  consumer of `wb_snap`, `wb_interp`, `wb_prof` and (through `wb_snap`) `wb_det`:
+  the whole LP-03/LP-04 determinism, snapshot and profiling cluster hangs off it.
+  Deleting it would orphan a shipped pad's implementation. The resolution is to
+  make it the live path (Phase 1), not to remove it.
 - **Two quadkey representations.** `wb_spatial.h` defines
   `typedef uint64_t wb_qkey` (morton handle, level in bits 63..60).
   `wb_qkey.h` (LP-108) speaks a `const char *` of `'0'..'3'`. Nothing converts
@@ -220,6 +225,11 @@ difference between a library and a product:
   leaves; the shipped experience is single-process and local.
 - **No input path.** `wb_input`, `wb_camera` and `wb_character` are leaves —
   which is why the demo has to drive the player with a script.
+- **No sim-timing path.** The fixed-timestep accumulator (`wb_interp`), the
+  per-tick divergence digest (`wb_snap`/`wb_det`) and the profiler (`wb_prof`)
+  hang off `wb_exp`, which the host never calls. So the shipped path has no fixed
+  timestep, no snapshot/restore and no way to detect a divergence — the LP-03 and
+  LP-04 pads are shipped and unreachable at once.
 
 ### 4.2 Player-experience gaps
 
@@ -377,7 +387,11 @@ Each phase has an exit criterion that is a *running program*, not a document.
   builds, refuses a stale binary, plays both shipped gametypes and asserts the
   output. Verified that it fails when a source is touched and passes after a
   rebuild, so it is a real gate and not theatre.
-- Resolve `wb_exp`: delete it, or make it the live path. It is dead code today.
+- Resolve `wb_exp` — **not by deleting it.** It looks dead (the host never calls
+  it) but it is the only consumer of `wb_snap`, `wb_interp`, `wb_prof` and
+  `wb_det`, i.e. the whole LP-03/LP-04 determinism cluster; removing it would
+  orphan a shipped pad. The resolution is to make it the live path, which is the
+  first job of Phase 1.
 - **Exit:** `make all` links, `make slice` passes, and a stale-run check fails CI.
 
 ### Phase 1 — Composition: put the engine in the host
