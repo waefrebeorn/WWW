@@ -4,6 +4,7 @@
 #include "wb_host.h"
 #include "wb_character.h"
 #include "wb_det.h"
+#include "wb_hud.h"
 #include "wb_input.h"
 #include "wb_interp.h"
 #include "wb_prof.h"
@@ -592,6 +593,17 @@ int wb_host_render(wb_host *h, wb_framebuffer *fb) {
                                   is_player ? 0.5f : 0.35f,
                                   is_player ? 0xFFE080 : 0xC0C8D0);
     }
+
+    /* The HUD is the last layer: it is screen-space, not world-space, so it is
+     * drawn after every marker and never occluded by one. This is the stone that
+     * makes the objective visible -- the score and the clock exist in the host
+     * and now they are on the screen. */
+    if (h->has_objective)
+        wb_hud_match(fb, 12, 12, wb_host_objective_state_name(h),
+                     wb_host_objective_score_of(h, 0),
+                     wb_host_objective_score_of(h, 1),
+                     wb_host_objective_clock(h), 0xFFF2C0, 2);
+
     return drawn;
 }
 

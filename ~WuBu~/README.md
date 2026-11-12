@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 90 gates, 8544 assertions
+mingw32-make test       # 91 gates, 8581 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -39,6 +39,22 @@ wb.objective_clock()              -- seconds left
 
 `duel-stadium` is the worked example: an opponent walks at you and tags on
 contact, first to three takes it. `make slice` asserts the match resolves.
+
+### The screen
+
+The frame carries the match: the player and every other body are markers through
+the follow camera, and the HUD is drawn last, in screen space, so nothing
+occludes it. `--render out.ppm` writes the frame; `--window` presents it live.
+
+```
+STATE WON
+SCORE 0-3
+CLOCK 117.1
+```
+
+The font is a 5x7 bitmap — uppercase and digits only. Text shaping (kerning,
+ligatures, bidi, non-Latin scripts) is LP-42's own hard sub-problem and is not
+solved here; the HUD is the stone that makes the rest of the UI stack visible.
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
 that Windows refuses. Create the directory once in the shell and the makefile
@@ -94,7 +110,7 @@ platform pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the
 space: what it is for, and what it refuses to be.
 
 `docs/EXPERIENCE-ASSESSMENT.md` is the companion read. It measures how much of
-the engine the shipped binary actually reaches — **20 of 94 modules** — separates
+the engine the shipped binary actually reaches — **21 of 95 modules** — separates
 the player experience from the creator experience, and proposes the validation
 mechanisms (vertical-slice gate, bot playtests, experience telemetry, the
 creator-workflow gate) that module gates cannot provide. Run

@@ -169,6 +169,17 @@ else
   ok "render: player drawn at frame centre (pixel $centre)"
 fi
 
+# The HUD is a screen-space layer drawn after the markers: the match's state,
+# score and clock must be VISIBLE, not merely printed to stdout. The panel is
+# drawn at (12,12); the first lit pixel of the "S" in STATE is at (14,12).
+hud_off=$((15 + (12 * 640 + 14) * 3))
+hud_px="$(tail -c +$((hud_off + 1)) "$ppm" | head -c 3 | od -An -tx1 | tr -d ' \n')"
+if [ "$hud_px" = "1a2430" ]; then
+  bad "hud: the match panel was not drawn (pixel is sky)"
+else
+  ok "hud: match panel drawn at the top-left (pixel $hud_px)"
+fi
+
 # ---- 7. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'

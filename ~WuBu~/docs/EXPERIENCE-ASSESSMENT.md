@@ -12,8 +12,8 @@ reproducible from the commands in §9.
 
 ## 1. TL;DR
 
-1. **The engine is a capability library, not a product.** 94 modules, 18k LOC of
-   core C11, 90 gates / 8,544 assertions, 0 fail — and **only 20 of 94 modules are
+1. **The engine is a capability library, not a product.** 95 modules, 18k LOC of
+   core C11, 91 gates / 8,581 assertions, 0 fail — and **only 21 of 95 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -42,11 +42,11 @@ reproducible from the commands in §9.
 
 | What | Number |
 |---|---|
-| Core `.c` / `.h` | 99 / 94 |
-| Core LOC | 12,131 + 5,851 = **17,982** |
+| Core `.c` / `.h` | 100 / 95 |
+| Core LOC | 12,300 + 5,924 = **18,224** |
 | Other src (`lua`, `net`, `lv`, `platform`) | 1,190 + 1,028 + 6,807 + 292 LOC |
-| Gates | **90 results / 8,544 assertions / 0 fail** |
-| Test sources | 87 |
+| Gates | **91 results / 8,581 assertions / 0 fail** |
+| Test sources | 88 |
 | Pads | 114 → **9 shipped, 48 partial, 57 todo** |
 
 ### 2.2 The wiring, measured
@@ -62,8 +62,8 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **20 of 94 modules are reachable from the shipped path.**
-> `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_input,
+> **21 of 95 modules are reachable from the shipped path.**
+> `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_hud, wb_input,
 > wb_interp, wb_json, wb_lua_host, wb_mode, wb_objective, wb_prof, wb_render,
 > wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
@@ -489,10 +489,24 @@ line, and `test-objective` covers the rules and refusals.
 
 - **Exit:** met. A bot completes a full loop with an objective, on the shipped
   path, with a deterministic digest (`duel-stadium` = `f11c863a100e5101`).
+
+**The score is visible (LP-42 stone 1 of XL).** `wb_hud` puts characters and
+labelled rows into the framebuffer the renderer already owns, and `wb_host_render`
+draws the match panel last — screen-space, after every marker, so nothing occludes
+it. A frame of `duel-stadium` now carries `STATE WON` / `SCORE 0-3` /
+`CLOCK 117.1` in its top-left corner, in the window and in the saved PPM. The
+slice asserts the panel's pixel, so a frame without it fails the gate.
+
+What this stone deliberately does **not** solve, named rather than papered over:
+there is no text shaping (a fixed 5x7 bitmap font, uppercase and digits, no
+kerning, no ligatures, no bidi, no non-Latin script — everything non-Latin stays
+blocked on real shaping), no layout or containers, no retained widget tree and no
+focus chain. An immediate-mode stack is the next stone.
+
   What remains in this phase is the rest of the loop: **onboarding** (a first-time
   player is told what to do), **animation and audio** (nothing moves or sounds
-  yet — the marker is a billboard), and **UI/HUD** (`LP-42`: the score exists but
-  nothing on screen shows it).
+  yet — the marker is a billboard), and the rest of **UI** (`LP-42`: a widget
+  stack, layout, a focus chain, and real text shaping).
 
 ### Phase 3 — The creator loop
 **Validation feedback** (M4), **hot reload**, **publish**, **creator analytics**
@@ -680,7 +694,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 90 gate results / 8,544 assertions / 0 fail
+mingw32-make test            # 91 gate results / 8,581 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

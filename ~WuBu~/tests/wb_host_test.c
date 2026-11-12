@@ -212,6 +212,17 @@ int main(void) {
         /* And a bad objective is refused rather than half-installed. */
         CHECK(wb_host_set_objective(h, 99, 2, 1, 0.0) == -1,
               "an unknown rule is refused");
+
+        /* Rendering: a host with an objective draws the match panel into its
+         * frame, so the score is visible rather than merely printed. */
+        static uint32_t px[640 * 480];
+        wb_framebuffer fb = { px, 640, 480 };
+        wb_host_render(h, &fb);
+        int ink = 0;
+        for (int i = 0; i < 640 * 480; i++) if (px[i]) ink++;
+        CHECK(ink > 0, "a frame of the world has content");
+        CHECK(px[12 * 640 + 14] == 0xFFF2C0,
+              "the HUD panel is drawn into the frame");
         wb_host_close(h);
     }
 
@@ -227,6 +238,13 @@ int main(void) {
         CHECK(strcmp(wb_host_objective_state_name(h), "none") == 0,
               "the state name says none");
         CHECK(wb_host_running(h) == 1, "the host still runs");
+
+        /* No objective, no panel: the hub's frame must not carry match ink. */
+        static uint32_t px2[640 * 480];
+        wb_framebuffer fb2 = { px2, 640, 480 };
+        wb_host_render(h, &fb2);
+        CHECK(px2[12 * 640 + 14] != 0xFFF2C0,
+              "a mode without an objective draws no match panel");
         wb_host_close(h);
     }
 
