@@ -1,38 +1,63 @@
 /*
  * wb_lua_host.c -- WuBu Engine standalone entrypoint.
  *
- *   wubu_engine.exe <modes-root> <gametype> [player-id]
+ *   wubu_engine.exe <modes-root> <gametype> [player-id] [--input <action>]
  *
  * Opens the world space, registers every gametype under <modes-root>, runs the
  * named mode's entry script with its space bindings installed, spawns the
  * player into that mode's world, and steps until the mode sets
  * wb.running = false.
  *
- * Build: gcc -std=c11 -Ithirdparty/lua5.4 -Isrc/core -Isrc/lua \
- *        src/core/wb_ecs.c src/core/wb_spatial.c src/core/wb_tiles.c \
- *        src/core/wb_render.c src/core/wb_exp.c src/core/wb_host.c \
- *        src/lua/wb_script.c src/lua/wb_space_bind.c src/lua/wb_lua_host.c \
- *        every .c under thirdparty/lua5.4 -o wubu_engine -lm
+ * `--input` holds one action down for the whole run, which is how the headless
+ * binary demonstrates the input -> controller -> velocity path that a windowed
+ * platform layer drives with real keys. `none` (the default) leaves the input
+ * state empty, so the mode's own script drives the player.
+ *
+ * Build: mingw32-make all
  */
 #include "wb_host.h"
 #include "wb_script.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static void err(const char *msg) { fprintf(stderr, "wb: %s\n", msg); }
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <modes-root> <gametype> [player-id]\n", argv[0]);
+        fprintf(stderr,
+                "usage: %s <modes-root> <gametype> [player-id] "
+                "[--input fwd|back|left|right|jump|sprint|none]\n", argv[0]);
         return 2;
     }
     const char *root   = argv[1];
     const char *mode   = argv[2];
     const char *player = argc > 3 ? argv[3] : "player-1";
 
+    /* The optional action to hold down for the whole run. */
+    const char *input_name = "none";
+    for (int i = 4; i < argc - 1; i++) {
+        if (strcmp(argv[i], "--input") == 0) input_name = argv[i + 1];
+    }
+
     char why[1024];
     wb_host *h = wb_host_open(root, mode, player, -1, why, sizeof why);
     if (!h) { err(why); return 1; }
+
+    /* Translate the named action into the host's key map and hold it. */
+    int input_code = -1;
+    if      (strcmp(input_name, "fwd")    == 0) input_code = 'W';
+    else if (strcmp(input_name, "back")   == 0) input_code = 'S';
+    else if (strcmp(input_name, "left")   == 0) input_code = 'A';
+    else if (strcmp(input_name, "right")  == 0) input_code = 'D';
+    else if (strcmp(input_name, "jump")   == 0) input_code = ' ';
+    else if (strcmp(input_name, "sprint") == 0) input_code = 0x10;
+    else if (strcmp(input_name, "none")   != 0) {
+        fprintf(stderr, "wb: unknown --input '%s' "
+                        "(fwd|back|left|right|jump|sprint|none)\n", input_name);
+        return 2;
+    }
+    if (input_code >= 0) wb_host_input_key_down(h, input_code);
 
     printf("wb: in '%s' as %s (instance %s)\n",
            wb_host_mode(h), player, wb_host_instance(h));
@@ -53,9 +78,13 @@ int main(int argc, char **argv) {
     wb_prof_stat frame_stat;
     int have_frame = (wb_host_prof_summary(h, "frame", &frame_stat) == 0);
     unsigned long overruns = wb_host_prof_overruns(h);
+    double p[3] = {0, 0, 0};
+    int have_pos = (wb_host_player_pos(h, p) == 0);
     wb_host_close(h);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);
+    if (have_pos)
+        printf("wb: %s at (%.2f, %.2f, %.2f)\n", player, p[0], p[1], p[2]);
     if (have_frame)
         printf("wb: frame %.3f ms mean, %.3f ms p95, %.3f ms max "
                "(%lu overruns)\n",

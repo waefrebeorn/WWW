@@ -12,8 +12,8 @@ reproducible from the commands in §9.
 
 ## 1. TL;DR
 
-1. **The engine is a capability library, not a product.** 92 modules, 17k LOC of
-   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 15 of 92 modules are
+1. **The engine is a capability library, not a product.** 93 modules, 17k LOC of
+   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 18 of 93 modules are
    reachable from the shipped host**. The renderer, GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -62,18 +62,19 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **15 of 92 modules are reachable from the shipped path.**
-> `wb_det, wb_dist, wb_ecs, wb_host, wb_interp, wb_json, wb_lua_host, wb_mode,
-> wb_prof, wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> **18 of 93 modules are reachable from the shipped path.**
+> `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_input,
+> wb_interp, wb_json, wb_lua_host, wb_mode, wb_prof, wb_script, wb_snap,
+> wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
 Everything else — `wb_render`, `wb_gpu*`, `wb_physics*`, `wb_assets*`,
-`wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_input`, `wb_camera`,
-`wb_character`, `wb_edit`, `wb_heightfield`, all 15 of the nesting/geo layer — is
-**not reachable** from the host. It is linked into the binary and never called.
+`wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_edit`, `wb_heightfield`,
+all 15 of the nesting/geo layer — is **not reachable** from the host. It is
+linked into the binary and never called.
 
-The number moves as composition proceeds: it was 11 before Phase 1 began, and
-reached 14 when the fixed-step accumulator and the divergence digest were wired
-into the host. Run `tools/wiring_report.py` for the current value.
+The number moves as composition proceeds: 11 before Phase 1 began, 15 when the
+determinism cluster was wired in, 18 when input/camera/character joined. Run
+`tools/wiring_report.py` for the current value.
 
 ### 2.3 Dead and duplicated
 
@@ -227,8 +228,13 @@ difference between a library and a product:
 - **No avatar path.** `wb_avatar*` are leaves; there is no body to inhabit.
 - **No net path.** `src/net/*` and `wb_netmodel`/`wb_handoff`/`wb_match` are
   leaves; the shipped experience is single-process and local.
-- **No input path.** `wb_input`, `wb_camera` and `wb_character` are leaves —
-  which is why the demo has to drive the player with a script.
+- **No input path — now closed.** `wb_input`, `wb_camera` and `wb_character` were
+  leaves. The host owns all three: input is translated to actions through a
+  remappable key map, the controller drives the player's velocity over the ECS,
+  and the camera follows. Input drives the body only when a movement action is
+  held, so a mode's own script still owns the player when no key is down. The
+  MuJoCo adapter was split out (`wb_character_mj.{h,c}`) so the controller is
+  backend-neutral and no MuJoCo type is in the host's include graph at all.
 - **No sim-timing path — now closed.** The fixed-timestep accumulator, the
   per-tick divergence digest and the profiler all hung off `wb_exp`, which the
   host never calls. The host now owns all three: it steps at a fixed rate, refreshes
@@ -412,10 +418,15 @@ Done so far:
   runs produce the same digest — LP-03's contract, now checked on the shipped
   path.
 - **The host owns the frame profiler.** Every step is inside a `frame` zone, with
-  `script` and `physics` zones nested in it, and the frame zone carries the
-  LP-05 budget. The CLI reports the frame mean/p95/max and the overrun count.
-  Reachability moved from 11 to 15 of 92 — the whole LP-01/LP-03/LP-04/LP-05
-  cluster is now on the shipped path.
+  `script`, `control` and `physics` zones nested in it, and the frame zone carries
+  the LP-05 budget. The CLI reports the frame mean/p95/max and the overrun count.
+- **The host owns input, the camera and the player controller.** Input is mapped
+  to actions through a remappable key map; the controller drives the player's
+  velocity over the ECS; the camera follows. `make slice` now drives the path
+  with a held action and asserts the player moves under input and stands still
+  without it. Reachability moved from 11 to 18 of 93.
+  `wb_character_mj.{h,c}` is the MuJoCo adapter, split out so the controller is
+  backend-neutral and the host's include graph contains no MuJoCo type at all.
 
 - **Exit:** `make run` opens a window, draws a frame from the world, and the
   player moves under input. No new gameplay.

@@ -25,6 +25,8 @@
 
 #include "wb_dist.h"
 #include "wb_ecs.h"
+#include "wb_character.h"
+#include "wb_input.h"
 #include "wb_mode.h"
 #include "wb_prof.h"
 #include "wb_worldspace.h"
@@ -96,6 +98,36 @@ int wb_host_prof_summary(wb_host *h, const char *name, wb_prof_stat *out);
 /* Budget overruns since the host opened (LP-05's gate: a slot given a per-frame
  * allowance counts a frame it exceeded it). */
 unsigned long wb_host_prof_overruns(const wb_host *h);
+
+/* ---- Input and the player controller ------------------------------------- */
+
+/* The host owns a platform-agnostic input state. A platform layer feeds it
+ * through these; with none attached the host runs with no keys held, which is
+ * what the headless binary does. */
+wb_input *wb_host_input(wb_host *h);
+
+void wb_host_input_key_down(wb_host *h, int code);
+void wb_host_input_key_up(wb_host *h, int code);
+void wb_host_input_button(wb_host *h, int button, int down);
+void wb_host_input_mouse_move(wb_host *h, double dx, double dy);
+void wb_host_input_wheel(wb_host *h, double steps);
+
+/* The key map the host translates into actions. Defaults to WASD + Space +
+ * Shift, in platform key codes; a platform layer with real codes remaps this. */
+typedef struct {
+    int fwd, back, left, right, jump, sprint;
+} wb_host_keys;
+
+void wb_host_set_keys(wb_host *h, const wb_host_keys *keys);
+
+/* The actions the current input state maps to, the controller's state, and the
+ * follow camera. */
+void wb_host_actions(const wb_host *h, wb_actions *out);
+wb_character *wb_host_character(wb_host *h);
+wb_camera *wb_host_camera(wb_host *h);
+
+/* The player's world position, for a renderer or a tool. -1 if unavailable. */
+int wb_host_player_pos(const wb_host *h, double p[3]);
 
 /* The mode's own wb.running flag: a script sets wb.running = false to stop the
  * host. Missing/falsey means keep running. */

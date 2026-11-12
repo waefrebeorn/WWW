@@ -101,7 +101,35 @@ note "determinism"
 det_case "omniverse-hub"
 det_case "duel-stadium"
 
-# ---- 5. verdict -----------------------------------------------------------
+# ---- 5. input path --------------------------------------------------------
+# The player must move when input says so and stand still when it does not. This
+# is the path a windowed platform layer drives with real keys; the headless
+# binary drives it with a held action.
+note "input"
+move_case() {
+  local action="$1" expect="$2" pos
+  pos="$(./build/wubu_engine.exe games duel-stadium player-1 --input "$action" 2>&1 \
+        | sed -n 's/^wb: player-1 at (\(.*\))$/\1/p')"
+  if [ "$expect" = "moved" ]; then
+    case "$pos" in
+      ""|"0.00, 0.00, 0.00") bad "$action: player did not move (at '${pos:-nowhere}')" ;;
+      *) ok "$action: player moved to ($pos)" ;;
+    esac
+  else
+    if [ "$pos" = "0.00, 0.00, 0.00" ]; then
+      ok "$action: player stayed put"
+    else
+      bad "$action: player moved to ($pos), expected it to stay put"
+    fi
+  fi
+}
+
+move_case fwd moved
+move_case back moved
+move_case left moved
+move_case none still
+
+# ---- 6. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'
   exit 1

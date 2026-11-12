@@ -10,7 +10,6 @@
 #define WB_CHARACTER_H
 
 #include "wb_camera.h"
-#include "wb_physics.h"
 
 /* High-level actions. The platform layer maps keys/buttons onto these. */
 typedef struct {
@@ -29,9 +28,38 @@ typedef struct {
 
 void wb_character_init(wb_character *c);
 
-/* Apply one frame of actions. `cam` supplies the movement basis (camera
- * relative controls: "forward" is where the camera looks). */
-void wb_character_apply(wb_character *c, wb_physics *p, int body,
-                        const wb_actions *a, const wb_camera *cam, double dt);
+/* The backend-neutral form of the controller.
+ *
+ * The controller needs exactly four things from a body -- read its velocity,
+ * write its velocity, ask whether it is on the ground, and set its facing. It
+ * does not need a physics engine, so a host can supply those over whatever it
+ * already owns: an ECS component array, a networking buffer, a replay log. This
+ * is what keeps the movement math in one place instead of one place per backend.
+ *
+ * `set_vel` receives the desired horizontal velocity; `set_yaw` the facing. A
+ * callback may be NULL when the backend has no such notion (an ECS world has no
+ * ground plane), in which case that feature is skipped rather than faked. */
+typedef struct wb_character_body {
+    void   *ctx;
+    void  (*get_vel)(void *ctx, double v[3]);
+    void  (*set_vel)(void *ctx, const double v[3]);
+    /* The same write, bypassing whatever the backend's character-move path does
+     * to a desired velocity. Jumping is an impulse, not a desired velocity, so
+     * it must not be clamped or smoothed -- this is why the callback exists
+     * separately. May be NULL, in which case set_vel is used. */
+    void  (*set_vel_direct)(void *ctx, const double v[3]);
+    int   (*grounded)(void *ctx);       /* may be NULL */
+    void  (*set_yaw)(void *ctx, double yaw);  /* may be NULL */
+} wb_character_body;
+
+void wb_character_apply_body(wb_character *c, const wb_character_body *b,
+                             const wb_actions *a, const wb_camera *cam,
+                             double dt);
+
+/* True when any movement action is held. A host uses this to decide whether the
+ * controller or the mode's own script is driving the body this frame: with no
+ * actions the controller must leave the velocity alone, or it would silently
+ * brake whatever the mode asked for. */
+int wb_actions_any(const wb_actions *a);
 
 #endif /* WB_CHARACTER_H */

@@ -7,6 +7,7 @@
  */
 #include "wb_camera.h"
 #include "wb_character.h"
+#include "wb_character_mj.h"
 #include "wb_input.h"
 #include "wb_physics.h"
 

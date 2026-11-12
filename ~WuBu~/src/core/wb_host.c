@@ -2,7 +2,9 @@
  * wb_host.c -- the gametype host (slice 22). See wb_host.h.
  */
 #include "wb_host.h"
+#include "wb_character.h"
 #include "wb_det.h"
+#include "wb_input.h"
 #include "wb_interp.h"
 #include "wb_prof.h"
 #include "wb_script.h"
@@ -29,6 +31,11 @@ struct wb_host {
     uint32_t       ticks;       /* whole sim steps taken */
     float          alpha;       /* render-interpolation alpha in [0,1) */
     wb_prof       *prof;        /* frame profiler (LP-01/LP-05) */
+    wb_input       in;          /* platform-agnostic input state */
+    wb_camera      cam;         /* follow camera */
+    wb_character   ch;          /* player controller */
+    wb_character_body body;     /* the player's body, over the ECS */
+    wb_host_keys   keys;        /* key map */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -38,6 +45,41 @@ struct wb_host {
  * is either constant or cosmetic, so the digest covers exactly what a replay,
  * a rollback or a mesh authority would compare. */
 static const wb_comp_type wb_host_state[] = { WB_COMP_POSITION, WB_COMP_VELOCITY };
+
+/* ---- The player's body, expressed over the ECS --------------------------- */
+
+typedef struct {
+    wb_world *w;
+    uint32_t  index;
+} wb_ecs_body_ctx;
+
+static float *wb_ecs_comp(wb_ecs_body_ctx *c, wb_comp_type t) {
+    if (!wb_world_slot_alive(c->w, c->index)) return NULL;
+    if (!wb_world_comp_present(c->w, t, c->index)) return NULL;
+    size_t esz = wb_world_comp_elem_size(c->w, t);
+    uint8_t *base = (uint8_t *)wb_world_comp_data(c->w, t);
+    return (float *)(base + (size_t)c->index * esz);
+}
+
+static void wb_ecs_get_vel(void *ctx, double v[3]) {
+    wb_host *h = (wb_host *)ctx;
+    wb_ecs_body_ctx c = { h->world, h->player.index };
+    float *f = wb_ecs_comp(&c, WB_COMP_VELOCITY);
+    v[0] = f ? f[0] : 0.0;
+    v[1] = f ? f[1] : 0.0;
+    v[2] = f ? f[2] : 0.0;
+}
+static void wb_ecs_set_vel(void *ctx, const double v[3]) {
+    wb_host *h = (wb_host *)ctx;
+    wb_ecs_body_ctx c = { h->world, h->player.index };
+    float *f = wb_ecs_comp(&c, WB_COMP_VELOCITY);
+    if (f) { f[0] = (float)v[0]; f[1] = (float)v[1]; f[2] = (float)v[2]; }
+}
+static void wb_ecs_set_yaw(void *ctx, double yaw) {
+    /* The ECS has no facing component; the controller's own yaw is authoritative
+     * for anything that asks it back. */
+    (void)ctx; (void)yaw;
+}
 
 const char *wb_host_error(const wb_host *h) {
     return (h && h->err[0]) ? h->err : NULL;
@@ -136,6 +178,20 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
     }
     wb_prof_set_budget(h->prof, "frame", (float)WB_HOST_FIXED_DT);
 
+    /* Input, camera and the player controller. The default key map is WASD +
+     * Space + Shift in platform key codes; a platform layer remaps it. */
+    wb_input_init(&h->in);
+    wb_camera_init(&h->cam);
+    wb_character_init(&h->ch);
+    h->keys.fwd = 'W'; h->keys.back = 'S';
+    h->keys.left = 'A'; h->keys.right = 'D';
+    h->keys.jump = ' '; h->keys.sprint = 0x10;   /* Shift */
+    h->body.ctx     = h;
+    h->body.get_vel = wb_ecs_get_vel;
+    h->body.set_vel = wb_ecs_set_vel;
+    h->body.grounded = NULL;      /* the ECS has no ground plane */
+    h->body.set_yaw = wb_ecs_set_yaw;
+
     /* The mode's script, bound to its world and carrying its space context --
      * so wb.add_spawn / wb.add_gate land in the mode's OWN world. */
     h->L = wb_script_create_state(h->world, h->ws, gamemode);
@@ -222,6 +278,16 @@ int wb_host_step(wb_host *h, float dt) {
             rc = wb_script_step(h->L, (float)WB_HOST_FIXED_DT);
         }
         if (rc < 0) break;
+        /* Input drives the player only when some action is held: with none, the
+         * controller must leave the velocity alone, or it would silently brake
+         * whatever the mode's own script asked for. */
+        WB_PROF_ZONE(pr, "control") {
+            wb_actions a;
+            wb_host_actions(h, &a);
+            if (wb_actions_any(&a))
+                wb_character_apply_body(&h->ch, &h->body, &a, &h->cam,
+                                        (float)WB_HOST_FIXED_DT);
+        }
         WB_PROF_ZONE(pr, "physics") {
             wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
         }
@@ -231,6 +297,10 @@ int wb_host_step(wb_host *h, float dt) {
     wb_prof_zone_end(pr, "frame");
     h->alpha = wb_interp_alpha(wb_det_fixed_remainder(&h->acc), WB_HOST_FIXED_DT);
     wb_prof_end_frame(pr);
+    /* The camera follows the player; input edges are consumed once per frame. */
+    double p[3];
+    if (wb_host_player_pos(h, p) == 0) wb_camera_update(&h->cam, p, 0.5);
+    wb_input_end_frame(&h->in);
     return rc < 0 ? -1 : (steps > 0 ? 1 : 0);
 }
 
@@ -259,6 +329,56 @@ int wb_host_prof_summary(wb_host *h, const char *name, wb_prof_stat *out) {
 
 unsigned long wb_host_prof_overruns(const wb_host *h) {
     return (h && h->prof) ? wb_prof_total_overruns(h->prof) : 0;
+}
+
+/* ---- Input and the player controller ------------------------------------- */
+
+wb_input *wb_host_input(wb_host *h) { return h ? &h->in : NULL; }
+
+void wb_host_input_key_down(wb_host *h, int code) {
+    if (h) wb_input_key_down(&h->in, code);
+}
+void wb_host_input_key_up(wb_host *h, int code) {
+    if (h) wb_input_key_up(&h->in, code);
+}
+void wb_host_input_button(wb_host *h, int button, int down) {
+    if (h) wb_input_button(&h->in, button, down);
+}
+void wb_host_input_mouse_move(wb_host *h, double dx, double dy) {
+    if (h) wb_input_mouse_move(&h->in, dx, dy);
+}
+void wb_host_input_wheel(wb_host *h, double steps) {
+    if (h) wb_input_wheel(&h->in, steps);
+}
+
+void wb_host_set_keys(wb_host *h, const wb_host_keys *keys) {
+    if (h && keys) h->keys = *keys;
+}
+
+void wb_host_actions(const wb_host *h, wb_actions *out) {
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+    if (!h) return;
+    out->fwd    = wb_input_down(&h->in, h->keys.fwd);
+    out->back   = wb_input_down(&h->in, h->keys.back);
+    out->left   = wb_input_down(&h->in, h->keys.left);
+    out->right  = wb_input_down(&h->in, h->keys.right);
+    out->jump   = wb_input_pressed(&h->in, h->keys.jump);   /* edge, not level */
+    out->sprint = wb_input_down(&h->in, h->keys.sprint);
+}
+
+wb_character *wb_host_character(wb_host *h) { return h ? &h->ch : NULL; }
+wb_camera *wb_host_camera(wb_host *h) { return h ? &h->cam : NULL; }
+
+int wb_host_player_pos(const wb_host *h, double p[3]) {
+    if (!h || !p) return -1;
+    wb_ecs_body_ctx c = { h->world, h->player.index };
+    float *f = wb_ecs_comp(&c, WB_COMP_POSITION);
+    if (!f) return -1;
+    p[0] = f[0];
+    p[1] = f[1];
+    p[2] = f[2];
+    return 0;
 }
 
 int wb_host_running(wb_host *h) {
