@@ -39,15 +39,19 @@ int main(int argc, char **argv) {
 
     int guard = 0;
     while (guard++ < 120000 && wb_host_running(h)) {
-        if (wb_host_step(h, 1.0f / 60.0f) < 0) {
+        if (wb_host_step(h, (float)WB_HOST_FIXED_DT) < 0) {
             const char *e = wb_host_error(h);
             err(e ? e : "mode step failed");
             break;
         }
-        wb_physics_tick(wb_host_world(h), 1.0f / 60.0f);
     }
 
+    /* Physics is integrated by the host, once per fixed step, so the caller only
+     * paces frames. */
+    uint32_t ticks = wb_host_ticks(h);
+    unsigned long long digest = (unsigned long long)wb_host_digest(h);
     wb_host_close(h);
-    printf("wb: engine exited clean after %d ticks\n", guard - 1);
+    printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
+           ticks, digest);
     return 0;
 }

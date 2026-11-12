@@ -2,7 +2,10 @@
  * wb_host.c -- the gametype host (slice 22). See wb_host.h.
  */
 #include "wb_host.h"
+#include "wb_det.h"
+#include "wb_interp.h"
 #include "wb_script.h"
+#include "wb_snap.h"
 #include "wb_space_bind.h"
 #include "wb_worldspace.h"
 #include "wb_util.h"
@@ -20,10 +23,19 @@ struct wb_host {
     wb_world      *world;
     lua_State     *L;
     wb_entity      player;      /* the player's body in the mode's world */
+    wb_det_fixed   acc;         /* fixed-step accumulator (LP-03/LP-04) */
+    uint64_t       digest;      /* per-tick divergence digest (LP-03) */
+    uint32_t       ticks;       /* whole sim steps taken */
+    float          alpha;       /* render-interpolation alpha in [0,1) */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
 };
+
+/* The components that ARE the simulation state. Everything else (mass, label)
+ * is either constant or cosmetic, so the digest covers exactly what a replay,
+ * a rollback or a mesh authority would compare. */
+static const wb_comp_type wb_host_state[] = { WB_COMP_POSITION, WB_COMP_VELOCITY };
 
 const char *wb_host_error(const wb_host *h) {
     return (h && h->err[0]) ? h->err : NULL;
@@ -111,6 +123,7 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
         goto fail;
     }
     wb_world_setup_comps(h->world);
+    wb_det_fixed_init(&h->acc, WB_HOST_FIXED_DT);
 
     /* The mode's script, bound to its world and carrying its space context --
      * so wb.add_spawn / wb.add_gate land in the mode's OWN world. */
@@ -181,7 +194,31 @@ void wb_host_close(wb_host *h) {
 
 int wb_host_step(wb_host *h, float dt) {
     if (!h || !h->L) return -1;
-    return wb_script_step(h->L, dt);
+    /* Consume whole fixed steps from the frame time; the remainder is the render
+     * alpha, never sim state. The headless host feeds a fixed 1/60, which buys
+     * exactly one step per frame -- the same contract a lockstep client keeps. */
+    int steps = wb_det_fixed_advance(&h->acc, (double)dt);
+    for (int i = 0; i < steps; i++) {
+        if (wb_script_step(h->L, (float)WB_HOST_FIXED_DT) < 0)
+            return -1;
+        wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
+        h->ticks++;
+        h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
+    }
+    h->alpha = wb_interp_alpha(wb_det_fixed_remainder(&h->acc), WB_HOST_FIXED_DT);
+    return steps > 0 ? 1 : 0;
+}
+
+uint32_t wb_host_ticks(const wb_host *h) {
+    return h ? h->ticks : 0;
+}
+
+uint64_t wb_host_digest(const wb_host *h) {
+    return h ? h->digest : 0;
+}
+
+float wb_host_render_alpha(const wb_host *h) {
+    return h ? h->alpha : 0.0f;
 }
 
 int wb_host_running(wb_host *h) {

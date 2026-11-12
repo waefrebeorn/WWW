@@ -225,7 +225,8 @@ test-space: build $(LUA_OBJS)
 TEST_HOST := build/wb_host_test.exe
 test-host: build $(LUA_OBJS)
 	$(CC) $(CFLAGS) -Isrc/core -Isrc/lua src/core/wb_ecs.c \
-	  $(WORLDSPACE_SRC) src/core/wb_host.c src/lua/wb_script.c \
+	  $(WORLDSPACE_SRC) src/core/wb_host.c src/core/wb_det.c \
+	  src/core/wb_snap.c src/core/wb_interp.c src/lua/wb_script.c \
 	  src/lua/wb_space_bind.c tests/wb_host_test.c \
 	  $(LUA_OBJS) -o $(TEST_HOST) -lm
 	./$(TEST_HOST)

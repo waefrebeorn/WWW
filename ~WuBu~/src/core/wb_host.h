@@ -58,10 +58,29 @@ wb_worldspace *wb_host_space(wb_host *h);
  * script as wb.player). */
 wb_entity wb_host_player(const wb_host *h);
 
-/* Run one frame of the mode's script. 1 = stepped, 0 = no step function,
- * -1 = error (see wb_host_error). Physics is integrated by the caller, exactly
- * as the standalone host always has. */
+/* The simulation's fixed step. The host consumes whole steps from the frame
+ * time the caller passes and carries the remainder, so the sim rate does not
+ * depend on how the caller paces itself -- LP-03/LP-04's contract. */
+#define WB_HOST_FIXED_DT (1.0 / 60.0)
+
+/* Run one frame of the mode. `dt` is the elapsed frame time; the host advances
+ * its fixed-step accumulator by it and runs however many whole steps that
+ * buys, integrating physics and refreshing the digest once per step.
+ * Returns 1 if at least one step ran, 0 if the frame bought no whole step,
+ * -1 on error (see wb_host_error). */
 int wb_host_step(wb_host *h, float dt);
+
+/* Whole simulation steps taken so far. */
+uint32_t wb_host_ticks(const wb_host *h);
+
+/* The per-tick divergence digest over the simulation state (position +
+ * velocity), LP-03's detector: two runs built and stepped the same way agree
+ * bit-for-bit, and a diverged one does not. */
+uint64_t wb_host_digest(const wb_host *h);
+
+/* Render-interpolation alpha in [0,1) from the accumulator's remainder. The sim
+ * state is never interpolated -- only what a renderer would draw. */
+float wb_host_render_alpha(const wb_host *h);
 
 /* The mode's own wb.running flag: a script sets wb.running = false to stop the
  * host. Missing/falsey means keep running. */

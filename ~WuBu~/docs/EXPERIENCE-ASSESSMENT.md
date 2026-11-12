@@ -13,7 +13,7 @@ reproducible from the commands in §9.
 ## 1. TL;DR
 
 1. **The engine is a capability library, not a product.** 92 modules, 17k LOC of
-   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 11 of 92 modules are
+   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 14 of 92 modules are
    reachable from the shipped host**. The renderer, GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -62,14 +62,18 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **11 of 92 modules are reachable from the shipped path.**
-> `wb_dist, wb_ecs, wb_host, wb_json, wb_lua_host, wb_mode, wb_script,
-> wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> **14 of 92 modules are reachable from the shipped path.**
+> `wb_det, wb_dist, wb_ecs, wb_host, wb_interp, wb_json, wb_lua_host, wb_mode,
+> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
 Everything else — `wb_render`, `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_input`, `wb_camera`,
 `wb_character`, `wb_edit`, `wb_heightfield`, all 15 of the nesting/geo layer — is
 **not reachable** from the host. It is linked into the binary and never called.
+
+The number moves as composition proceeds: it was 11 before Phase 1 began, and
+reached 14 when the fixed-step accumulator and the divergence digest were wired
+into the host. Run `tools/wiring_report.py` for the current value.
 
 ### 2.3 Dead and duplicated
 
@@ -225,11 +229,11 @@ difference between a library and a product:
   leaves; the shipped experience is single-process and local.
 - **No input path.** `wb_input`, `wb_camera` and `wb_character` are leaves —
   which is why the demo has to drive the player with a script.
-- **No sim-timing path.** The fixed-timestep accumulator (`wb_interp`), the
-  per-tick divergence digest (`wb_snap`/`wb_det`) and the profiler (`wb_prof`)
-  hang off `wb_exp`, which the host never calls. So the shipped path has no fixed
-  timestep, no snapshot/restore and no way to detect a divergence — the LP-03 and
-  LP-04 pads are shipped and unreachable at once.
+- **No sim-timing path — now partly closed.** The fixed-timestep accumulator, the
+  per-tick divergence digest and the profiler hang off `wb_exp`, which the host
+  never calls. The host now owns the accumulator and the digest itself (see
+  Phase 1), so the shipped path steps at a fixed rate and can detect a
+  divergence; `wb_prof` is still off the path.
 
 ### 4.2 Player-experience gaps
 
@@ -394,10 +398,20 @@ Each phase has an exit criterion that is a *running program*, not a document.
   first job of Phase 1.
 - **Exit:** `make all` links, `make slice` passes, and a stale-run check fails CI.
 
-### Phase 1 — Composition: put the engine in the host
+### Phase 1 — Composition: put the engine in the host *(in progress)*
 Wire, in order, each currently-unreachable subsystem into the shipped path:
 **render → input/camera/character → spatial/tiles → physics → assets/avatar**.
 This is largely inverting the existing leaf modules, not writing new ones.
+
+Done so far:
+- **The host owns the fixed-step accumulator and the divergence digest.** The
+  shipped loop used to step at a hard-coded `1/60` with no accumulator and no
+  digest; it now advances `wb_det_fixed`, integrates physics once per whole step,
+  and refreshes `wb_snap_digest_world` over position + velocity every tick. The
+  CLI reports `ticks` and the digest, and `make slice` asserts that two identical
+  runs produce the same digest — LP-03's contract, now checked on the shipped
+  path. Reachability moved from 11 to 14 of 92.
+
 - **Exit:** `make run` opens a window, draws a frame from the world, and the
   player moves under input. No new gameplay.
 

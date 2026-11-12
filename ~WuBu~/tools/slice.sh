@@ -80,7 +80,28 @@ run_case "duel-stadium" \
   "in 'duel-stadium' as player-1" \
   "engine exited clean"
 
-# ---- 4. verdict -----------------------------------------------------------
+# ---- 4. determinism -------------------------------------------------------
+# LP-03's contract, checked on the shipped path: identical runs must produce an
+# identical digest. A differing digest is a desync, whatever the cause -- a
+# different step count, an uninitialised read, a hash-order dependence.
+det_case() {
+  local dir="$1" d1 d2
+  d1="$(./build/wubu_engine.exe games "$dir" 2>&1 | grep -o 'digest [0-9a-f]*')"
+  d2="$(./build/wubu_engine.exe games "$dir" 2>&1 | grep -o 'digest [0-9a-f]*')"
+  if [ -z "$d1" ]; then
+    bad "$dir: no digest emitted"
+  elif [ "$d1" != "$d2" ]; then
+    bad "$dir: digest differs between identical runs ($d1 vs $d2)"
+  else
+    ok "$dir: deterministic ($d1)"
+  fi
+}
+
+note "determinism"
+det_case "omniverse-hub"
+det_case "duel-stadium"
+
+# ---- 5. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'
   exit 1
