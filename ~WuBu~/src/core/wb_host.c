@@ -51,12 +51,16 @@ struct wb_host {
     double         hint_seconds;             /* how long it stays up, 0 = never */
     wb_walk       *walks;       /* per-entity walk cycle, indexed by entity index */
     uint32_t       nwalks;      /* allocated entries in `walks` */
+    int           *last_step;   /* per-entity last half-cycle index (footsteps) */
     wb_audio       audio;       /* the sound of the match (LP-42 stone 2) */
-    int            last_step;   /* last half-cycle index of the player's stride */
     uint32_t       last_score;  /* the score last sounded for */
-    float         *snd;         /* accumulated audio, mono, for the caller to write */
+    /* The accumulated STEREO mix. One allocation, two halves: the channels must
+     * always be the same length, and a partial grow would leave the shorter one
+     * to be overwritten by the next mix. `snd_r` is `snd_l + snd_cap`. */
+    float         *snd_l;       /* accumulated left channel, for the caller to write */
+    float         *snd_r;       /* accumulated right channel (aliases snd_l + cap) */
     size_t         snd_n;       /* frames accumulated */
-    size_t         snd_cap;     /* allocated frames */
+    size_t         snd_cap;     /* allocated frames per channel */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -316,7 +320,9 @@ void wb_host_close(wb_host *h) {
     if (h->world) wb_world_destroy(h->world);
     if (h->ws) wb_worldspace_close(h->ws);
     free(h->walks);
-    free(h->snd);
+    free(h->last_step);
+    free(h->snd_l);                 /* snd_r is a half of the same allocation */
+    wb_audio_free(&h->audio);
     free(h);
 }
 
@@ -331,9 +337,13 @@ static void wb_host_grow_walks(wb_host *h, uint32_t need) {
     while (cap < need) cap *= 2;
     wb_walk *grown = realloc(h->walks, (size_t)cap * sizeof *grown);
     if (!grown) return;                    /* no animation rather than no host */
+    int *steps = realloc(h->last_step, (size_t)cap * sizeof *steps);
+    if (!steps) { h->walks = grown; return; }  /* walks grow, footsteps do not */
     for (uint32_t i = h->nwalks; i < cap; i++)
         wb_walk_init(&grown[i], WB_WALK_RATE_PER_METRE);
+    for (uint32_t i = h->nwalks; i < cap; i++) steps[i] = -1;
     h->walks = grown;
+    h->last_step = steps;
     h->nwalks = cap;
 }
 
@@ -407,19 +417,74 @@ static void wb_host_draw_figure(wb_framebuffer *fb, const wb_render_camera *rc,
     wb_render_marker(fb, rc, head, 0.14f, color);                 /* head     */
 }
 
+/* How far a body can be heard. A stadium is big and the mixer has eight voices;
+ * a footfall on the far side of the ground is not an event the player can use,
+ * and letting it take a voice would push out the one beside them. */
+#define WB_HOST_HEARING 30.0f
+
+/* A body's position in the world, or -1 when it has none. */
+static int wb_host_entity_pos(wb_host *h, uint32_t index, double p[3]) {
+    if (!h || !h->world || !p) return -1;
+    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
+    uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
+    if (!base || !wb_world_slot_alive(h->world, index) ||
+        !wb_world_comp_present(h->world, WB_COMP_POSITION, index))
+        return -1;
+    float *f = (float *)(base + (size_t)index * esz);
+    p[0] = f[0]; p[1] = f[1]; p[2] = f[2];
+    return 0;
+}
+
+/* Where a body is HEARD from: direction and distance from the listener's ear,
+ * in the listener's own frame. The camera is the listener, so looking somewhere
+ * is what puts a sound on one side rather than in the middle. */
+static void wb_host_placement(wb_host *h, uint32_t index,
+                              float *az, float *el, float *dist) {
+    double p[3], eye[3];
+    *az = 0.0f; *el = 0.0f; *dist = 1.0f;
+    if (wb_host_entity_pos(h, index, p) != 0) return;
+    wb_camera_eye(&h->cam, eye);
+    double dx = p[0] - eye[0], dy = p[1] - eye[1], dz = p[2] - eye[2];
+    double ground = sqrt(dx * dx + dy * dy);
+    double len = sqrt(ground * ground + dz * dz);
+    *dist = (float)(len > 0.1 ? len : 0.1);
+    /* The bearing is left in the WORLD frame (the camera looks along +x at yaw
+     * 0). The listener's yaw is applied separately in the mixer, which turns the
+     * head; subtracting it here too would turn it twice. */
+    double deg = atan2(dy, dx) * 180.0 / 3.14159265358979;
+    while (deg > 180.0) deg -= 360.0;
+    while (deg < -180.0) deg += 360.0;
+    *az = (float)deg;
+    *el = (float)(atan2(dz, ground) * 180.0 / 3.14159265358979);
+}
+
+/* One body's footfall, at that body's place. A stopped body holds its pose, so
+ * it holds its silence too. */
+static void wb_host_footstep(wb_host *h, uint32_t index) {
+    const wb_walk *w = &h->walks[index];
+    if (w->speed <= 0.05) return;
+    int half = (int)floor(w->phase / 3.14159265358979);
+    if (half == h->last_step[index]) return;
+    h->last_step[index] = half;
+    float az, el, dist;
+    wb_host_placement(h, index, &az, &el, &dist);
+    if (dist > WB_HOST_HEARING) return;
+    wb_audio_emit_at(&h->audio, WB_SND_FOOTSTEP, az, el, dist);
+}
+
 /* Turn simulation events into sound. Runs once per whole fixed step, so the
  * audio clock IS the simulation clock -- a frame that buys no step makes no
  * sound, and a match replays identically however the caller paces its frames. */
 static void wb_host_emit_sounds(wb_host *h) {
-    /* A footfall per half stride, and only when the body is actually moving:
-     * a stopped body holds its pose, so it should hold its silence too. */
-    if (h->walks && h->player.index < h->nwalks) {
-        const wb_walk *w = &h->walks[h->player.index];
-        int half = (int)floor(w->phase / 3.14159265358979);
-        if (half != h->last_step) {
-            h->last_step = half;
-            if (w->speed > 0.05) wb_audio_emit(&h->audio, WB_SND_FOOTSTEP);
-        }
+    /* A footfall per half stride, for every walking body, each at its own place
+     * in the world -- a footfall behind you is not the sound as one in front of
+     * you. The player goes first: their own footfall must not be the event a
+     * crowded ground drops. */
+    if (h->walks && h->last_step) {
+        uint32_t n = h->nwalks;
+        if (h->player.index < n) wb_host_footstep(h, h->player.index);
+        for (uint32_t i = 0; i < n; i++)
+            if (i != h->player.index) wb_host_footstep(h, i);
     }
     /* A tone when the score changes, on any side. */
     if (h->has_objective) {
@@ -442,12 +507,16 @@ static void wb_host_mix_audio(wb_host *h, double dt) {
     if (h->snd_n + (size_t)n > h->snd_cap) {
         size_t cap = h->snd_cap ? h->snd_cap : 4096;
         while (cap < h->snd_n + (size_t)n) cap *= 2;
-        float *grown = realloc(h->snd, cap * sizeof(float));
+        /* One allocation for both channels: they must stay the same length, and
+         * a partial growth would leave the short one to be overwritten by the
+         * next mix. */
+        float *grown = realloc(h->snd_l, cap * 2 * sizeof(float));
         if (!grown) return;
-        h->snd = grown;
+        h->snd_l = grown;
+        h->snd_r = grown + cap;
         h->snd_cap = cap;
     }
-    wb_audio_mix(&h->audio, h->snd + h->snd_n, n);
+    wb_audio_mix(&h->audio, h->snd_l + h->snd_n, h->snd_r + h->snd_n, n);
     h->snd_n += (size_t)n;
 }
 
@@ -503,6 +572,11 @@ int wb_host_step(wb_host *h, float dt) {
     /* The camera follows the player; input edges are consumed once per frame. */
     double p[3];
     if (wb_host_player_pos(h, p) == 0) wb_camera_update(&h->cam, p, 0.5);
+    /* The camera is the LISTENER: where the player is looking is where every
+     * sound is placed from. Set every frame, because the head turns. */
+    wb_audio_set_listener(&h->audio,
+                          (float)(h->cam.yaw * 180.0 / 3.14159265358979),
+                          0.0f, 0.0f);
     wb_input_end_frame(&h->in);
     return rc < 0 ? -1 : (steps > 0 ? 1 : 0);
 }
@@ -699,10 +773,18 @@ int wb_host_hint_visible(const wb_host *h) {
 
 /* --------------------------------------------------------------- audio */
 
-const float *wb_host_audio(const wb_host *h, size_t *nframes) {
-    if (!h) { if (nframes) *nframes = 0; return NULL; }
-    if (nframes) *nframes = h->snd_n;
-    return h->snd;
+/* The match's audio: the accumulated STEREO mix (left and right) and the number
+ * of frames in it. The buffers are the host's; the caller writes them out (the
+ * engine writes a WAV) and must not free them. */
+size_t wb_host_audio(const wb_host *h, const float **left, const float **right) {
+    if (!h) {
+        if (left) *left = NULL;
+        if (right) *right = NULL;
+        return 0;
+    }
+    if (left) *left = h->snd_l;
+    if (right) *right = h->snd_r;
+    return h->snd_n;
 }
 
 uint64_t wb_host_audio_events(const wb_host *h) {

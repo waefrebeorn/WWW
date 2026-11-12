@@ -172,24 +172,33 @@ int main(int argc, char **argv) {
     /* The match's audio, written out as a file the space owns rather than played
      * through a device: the same rule as the PPM frames. */
     if (sound_path) {
-        size_t nframes = 0;
-        const float *snd = wb_host_audio(h, &nframes);
-        /* wb_wav_write is the Big Mac writer and takes doubles; the host mixes
-         * in floats, so the conversion happens here rather than in the writer. */
-        double *pcm = NULL;
-        if (nframes > 0) {
-            pcm = malloc(nframes * sizeof(double));
-            if (pcm) for (size_t i = 0; i < nframes; i++) pcm[i] = snd[i];
+        const float *snd_l = NULL, *snd_r = NULL;
+        size_t nframes = wb_host_audio(h, &snd_l, &snd_r);
+        /* wb_wav_write_stereo is the Big Mac writer and takes doubles; the host
+         * mixes in floats, so the conversion happens here rather than in the
+         * writer. */
+        double *pcm_l = NULL, *pcm_r = NULL;
+        if (nframes > 0 && snd_l && snd_r) {
+            pcm_l = malloc(nframes * sizeof(double));
+            pcm_r = malloc(nframes * sizeof(double));
+            if (pcm_l && pcm_r) {
+                for (size_t i = 0; i < nframes; i++) {
+                    pcm_l[i] = snd_l[i];
+                    pcm_r[i] = snd_r[i];
+                }
+            }
         }
-        if (pcm && wb_wav_write(sound_path, pcm, nframes,
+        if (pcm_l && pcm_r &&
+            wb_wav_write_stereo(sound_path, pcm_l, pcm_r, nframes,
                                 wb_host_audio_rate(h)) == 0) {
             /* The engine measures its own output rather than trusting the
              * synthesiser: the level of the whole mix, and the dominant
              * frequency of the loudest window. A footfall is a LOW thud, so the
              * peak is checked, not just the loudness. */
             double rms = 0.0;
-            for (size_t i = 0; i < nframes; i++) rms += pcm[i] * pcm[i];
-            rms = sqrt(rms / (double)(nframes ? nframes : 1));
+            for (size_t i = 0; i < nframes; i++)
+                rms += pcm_l[i] * pcm_l[i] + pcm_r[i] * pcm_r[i];
+            rms = sqrt(rms / (double)(2 * (nframes ? nframes : 1)));
 
             double best = 0.0, peak_hz = 0.0;
             size_t win = 4096;
@@ -200,7 +209,7 @@ int main(int argc, char **argv) {
                     for (size_t off = 0; off + win <= nframes; off += win) {
                         double a = 0.0;
                         for (size_t i = 0; i < win; i++) {
-                            double v = pcm[off + i];
+                            double v = pcm_l[off + i];
                             Re[i] = v; Im[i] = 0.0;
                             a += v * v;
                         }
@@ -221,10 +230,10 @@ int main(int argc, char **argv) {
                    nframes, sound_path,
                    (unsigned long long)wb_host_audio_events(h),
                    rms, peak_hz);
-        } else if (!pcm) {
+        } else if (!pcm_l || !pcm_r) {
             fprintf(stderr, "wb: cannot write '%s'\n", sound_path);
         }
-        free(pcm);
+        free(pcm_l); free(pcm_r);
     }
 
     wb_host_close(h);

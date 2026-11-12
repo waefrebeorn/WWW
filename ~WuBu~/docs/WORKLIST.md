@@ -103,8 +103,8 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-23 | Animation retargeting & humanoid bone mapping | M | LP-22 | [504] | TODO |
 | LP-24 | Navmesh & pathfinding | M | LP-10 | [502][503] | TODO |
 | LP-27 | Animation-driven locomotion | M | LP-22 | [500] | TODO |
-| LP-25 | Audio engine | L | LP-06 | [39][40] | TODO |
-| LP-26 | Spatial audio | M | LP-25 | [43][41] | TODO |
+| LP-25 | Audio engine | L | LP-06 | [39][40] | **PARTIAL** (synthesiser + mixer, stereo WAV out, camera-listener math shipped; a device and streaming remain) |
+| LP-26 | Spatial audio | M | LP-25 | [43][41] | **PARTIAL** (HRTF binaural panner, per-voice placement and distance attenuation shipped; an HRTF database and occlusion remain) |
 | LP-66 | Animation compression (ACL) | L | LP-22 | [498][499][82] | TODO |
 | LP-67 | Motion matching / data-driven animation | L | LP-22, LP-66 | [500] | TODO |
 | LP-68 | Crowd / SIMD / GPU-batched skinning | L | LP-08, LP-22 | [501][502] | TODO |

@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 95 gates, 8712 assertions
+mingw32-make test       # 96 gates, 8755 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -82,17 +82,20 @@ its pose when it stops. No skeleton, no clip, no asset.
 
 ### The sound
 
-The match is audible. A footfall per half stride while the player moves, a tone
-when the score changes — synthesised, no samples. `--sound out.wav` writes the
-mix to a 16-bit mono WAV, and the engine measures what it just wrote: the RMS
-and the dominant frequency of the loudest window.
+The match is audible, and it is SOMEWHERE. A footfall per half stride for every
+walking body, each placed at that body's own position in the world; a tone when
+the score changes — synthesised, no samples. `--sound out.wav` writes the mix to
+a 16-bit stereo WAV, and the engine measures what it just wrote: the RMS and the
+dominant frequency of the loudest window.
 
 ```
-wb: wrote 240000 samples to build/match.wav (42 events, rms 0.0492, peak 105 Hz in the loudest window)
+wb: wrote 240000 frames to build/match.wav (42 events, rms 0.0492, peak 105 Hz in the loudest window)
 ```
 
-The WAV and DSP code are taken from the Big Mac repo (the WuBu musical agent),
-which wrote them to own their output formats.
+The synthesis is Big Mac's — the oscillator, ADSR, biquad and FDN reverb are the
+WuBu musical agent's own DSP — and the panner is a parametric HRTF: interaural
+delay, head shadow, a pinna notch for elevation, and distance attenuation. The
+camera is the listener, so turning the head moves every sound.
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
 that Windows refuses. Create the directory once in the shell and the makefile

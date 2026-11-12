@@ -129,11 +129,12 @@ double   wb_host_elapsed(const wb_host *h);
 const char *wb_host_hint(const wb_host *h);
 int       wb_host_hint_visible(const wb_host *h);
 
-/* The match's audio: the accumulated mono mix, the number of frames in it, and
- * how many sound events the run produced. The buffer is the host's; the caller
- * writes it out (the engine writes a WAV) and must not free it. */
-const float *wb_host_audio(const wb_host *h, size_t *nframes);
-uint64_t     wb_host_audio_events(const wb_host *h);
+/* The match's audio: the accumulated STEREO mix (left and right) and the number
+ * of frames in it, plus how many sound events the run produced. The buffers are
+ * the host's; the caller writes them out (the engine writes a WAV) and must not
+ * free them. */
+size_t wb_host_audio(const wb_host *h, const float **left, const float **right);
+uint64_t wb_host_audio_events(const wb_host *h);
 /* The rate the host mixes at. A caller writing the audio needs it for the
  * file's header. */
 int          wb_host_audio_rate(const wb_host *h);

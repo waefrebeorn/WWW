@@ -257,13 +257,14 @@ snd_out="$(./build/wubu_engine.exe games duel-stadium --frames 600 --input fwd \
 echo "$snd_out" | grep -q "wrote" || bad "audio: nothing was written"
 [ -s "$snd_wav" ] || bad "audio: no file"
 # 600 frames at the 60 Hz fixed step is 10 s; at 24 kHz that is 240000 frames,
-# and a WAV carries a 44-byte header, so the file must be exactly 480044 bytes.
-# The size is the clock check: it proves the audio ran on SIMULATION time.
+# and a STEREO WAV carries a 44-byte header plus two 16-bit channels, so the
+# file must be exactly 960044 bytes. The size is the clock check: it proves the
+# audio ran on SIMULATION time.
 snd_size=$(wc -c < "$snd_wav")
-if [ "$snd_size" -ne 480044 ]; then
-  bad "audio: wrong size ($snd_size bytes, expected 480044)"
+if [ "$snd_size" -ne 960044 ]; then
+  bad "audio: wrong size ($snd_size bytes, expected 960044)"
 else
-  ok "audio: the mix is 10 s at 24 kHz ($snd_size bytes)"
+  ok "audio: the mix is 10 s at 24 kHz stereo ($snd_size bytes)"
 fi
 # Silence is all zero bytes; anything else is a sound. `tr -d '0'` strips the
 # zero nibbles, so a silent mix leaves nothing. The WHOLE file is scanned: the

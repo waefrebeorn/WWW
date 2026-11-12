@@ -27,6 +27,13 @@ extern "C" {
 int wb_wav_write(const char *path, const double *samples, size_t n,
                  int sample_rate);
 
+/* Write a STEREO 16-bit PCM WAV from two mono arrays of `n` samples each,
+ * interleaved L,R. A spatial mix is meaningless on one channel: the whole point
+ * of the HRTF panner is that the ears disagree, and a mono file would average
+ * that disagreement away. */
+int wb_wav_write_stereo(const char *path, const double *left,
+                        const double *right, size_t n, int sample_rate);
+
 #ifdef __cplusplus
 }
 #endif
