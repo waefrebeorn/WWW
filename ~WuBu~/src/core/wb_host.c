@@ -381,6 +381,46 @@ int wb_host_player_pos(const wb_host *h, double p[3]) {
     return 0;
 }
 
+int wb_host_render(wb_host *h, wb_framebuffer *fb) {
+    if (!h || !fb || !fb->pixels || fb->width <= 0 || fb->height <= 0) return -1;
+
+    wb_render_clear(fb, WB_RENDER_SKY);
+
+    /* The follow camera is z-up, the renderer is y-up: map (x, y, z) to
+     * (x, z, y). The camera's declared target is the point we look at -- the
+     * eye is derived from it by the orbit, not the other way round. */
+    double eye[3];
+    wb_camera_eye(&h->cam, eye);
+    const float re[3] = { (float)eye[0], (float)eye[2], (float)eye[1] };
+    const float rt[3] = { (float)h->cam.target[0],
+                          (float)h->cam.target[2],
+                          (float)h->cam.target[1] };
+
+    wb_render_camera rc;
+    rc.eye[0] = re[0];            rc.eye[1] = re[1];            rc.eye[2] = re[2];
+    rc.at[0]  = rt[0];            rc.at[1]  = rt[1];            rc.at[2]  = rt[2];
+    rc.up[0]  = 0.0f;              rc.up[1]  = 1.0f;              rc.up[2]  = 0.0f;
+    rc.vfov_deg = 60.0f;
+    rc.near_z   = 0.1f;
+    rc.far_z    = 1000.0f;
+
+    int drawn = 0;
+    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
+    uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
+    uint32_t n = wb_world_next_index(h->world);
+    for (uint32_t i = 0; i < n; i++) {
+        if (!wb_world_slot_alive(h->world, i)) continue;
+        if (!wb_world_comp_present(h->world, WB_COMP_POSITION, i)) continue;
+        float *p = (float *)(base + (size_t)i * esz);
+        const float w[3] = { p[0], p[2], p[1] };       /* z-up -> y-up */
+        int is_player = (i == h->player.index);
+        drawn += wb_render_marker(fb, &rc, w,
+                                  is_player ? 0.5f : 0.35f,
+                                  is_player ? 0xFFE080 : 0xC0C8D0);
+    }
+    return drawn;
+}
+
 int wb_host_running(wb_host *h) {
     if (!h || !h->L) return 0;
     lua_getglobal(h->L, "wb");

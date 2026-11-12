@@ -228,7 +228,7 @@ test-host: build $(LUA_OBJS)
 	  $(WORLDSPACE_SRC) src/core/wb_host.c src/core/wb_det.c \
 	  src/core/wb_snap.c src/core/wb_interp.c src/core/wb_prof.c \
 	  src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c \
-	  src/lua/wb_script.c \
+	  src/core/wb_render.c src/lua/wb_script.c \
 	  src/lua/wb_space_bind.c tests/wb_host_test.c \
 	  $(LUA_OBJS) -o $(TEST_HOST) -lm
 	./$(TEST_HOST)

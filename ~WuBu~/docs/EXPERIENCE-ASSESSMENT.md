@@ -13,8 +13,8 @@ reproducible from the commands in §9.
 ## 1. TL;DR
 
 1. **The engine is a capability library, not a product.** 93 modules, 17k LOC of
-   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 18 of 93 modules are
-   reachable from the shipped host**. The renderer, GPU backend, physics, assets,
+   core C11, 88 gates / 8,463 assertions, 0 fail — and **only 19 of 93 modules are
+   reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
 2. **The player experience is a 148-tick tech demo.** `make run` prints three
@@ -45,7 +45,7 @@ reproducible from the commands in §9.
 | Core `.c` / `.h` | 97 / 92 |
 | Core LOC | 11,453 + 5,553 = **17,006** |
 | Other src (`lua`, `net`, `lv`) | 1,053 + 1,028 + 6,807 LOC |
-| Gates | **88 results / 8,457 assertions / 0 fail** |
+| Gates | **88 results / 8,463 assertions / 0 fail** |
 | Test sources | 86 |
 | Pads | 113 → **9 shipped, 47 partial, 57 todo** |
 
@@ -62,19 +62,19 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **18 of 93 modules are reachable from the shipped path.**
+> **19 of 93 modules are reachable from the shipped path.**
 > `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_input,
-> wb_interp, wb_json, wb_lua_host, wb_mode, wb_prof, wb_script, wb_snap,
-> wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> wb_interp, wb_json, wb_lua_host, wb_mode, wb_prof, wb_render, wb_script,
+> wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
-Everything else — `wb_render`, `wb_gpu*`, `wb_physics*`, `wb_assets*`,
+Everything else — `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_edit`, `wb_heightfield`,
 all 15 of the nesting/geo layer — is **not reachable** from the host. It is
 linked into the binary and never called.
 
 The number moves as composition proceeds: 11 before Phase 1 began, 15 when the
-determinism cluster was wired in, 18 when input/camera/character joined. Run
-`tools/wiring_report.py` for the current value.
+determinism cluster was wired in, 18 when input/camera/character joined, 19 when
+the renderer joined. Run `tools/wiring_report.py` for the current value.
 
 ### 2.3 Dead and duplicated
 
@@ -218,9 +218,14 @@ The single largest gap. The shipped binary touches 11 modules; 81 are off-path.
 This is not a criticism of the modules — most are genuinely good — it is the
 difference between a library and a product:
 
-- **No render path.** `wb_render` (software rasteriser) and `wb_gpu*` (D3D12 RHI)
-  are leaves. `make demo` runs the rasteriser as a separate example program; the
-  host never draws a frame.
+- **No render path — now closed.** `wb_render` (software rasteriser) was a leaf;
+  the host never drew a frame. The host now renders every mode into a framebuffer:
+  `wb_host_render` clears to sky, then draws a marker at every live body through
+  the follow camera, with the player brighter and larger. `--render out.ppm`
+  writes the frame so a headless run can show what it drew, and `make slice`
+  asserts the centre pixel is the player and not the sky. `wb_gpu*` (the D3D12
+  RHI) is still off the path: the software rasteriser is the portable floor and
+  this is it in use.
 - **No physical path.** `wb_physics*` (MuJoCo world/body/bind) are leaves.
 - **No spatial path.** `wb_spatial` and `wb_tiles` (the quadkey spine and the
   resident tile store) are leaves from the host. The world has no terrain and no
@@ -424,9 +429,15 @@ Done so far:
   to actions through a remappable key map; the controller drives the player's
   velocity over the ECS; the camera follows. `make slice` now drives the path
   with a held action and asserts the player moves under input and stands still
-  without it. Reachability moved from 11 to 18 of 93.
-  `wb_character_mj.{h,c}` is the MuJoCo adapter, split out so the controller is
-  backend-neutral and the host's include graph contains no MuJoCo type at all.
+  without it. `wb_character_mj.{h,c}` is the MuJoCo adapter, split out so the
+  controller is backend-neutral and the host's include graph contains no MuJoCo
+  type at all.
+- **The host renders the world.** `wb_host_render` draws every live body as a
+  marker through the follow camera — the shipped world is an ECS of bodies with
+  no terrain, so the entity layer is what "a frame of the world" means. The
+  renderer gained `wb_render_marker` for it, covered by six new checks in the
+  render gate. `--render out.ppm` writes the frame, and `make slice` asserts the
+  centre pixel is the player. Reachability moved from 11 to 19 of 93.
 
 - **Exit:** `make run` opens a window, draws a frame from the world, and the
   player moves under input. No new gameplay.
@@ -622,7 +633,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 88 gate results / 8,457 assertions / 0 fail
+mingw32-make test            # 88 gate results / 8,463 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

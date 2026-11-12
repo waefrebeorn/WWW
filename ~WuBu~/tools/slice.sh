@@ -129,7 +129,28 @@ move_case back moved
 move_case left moved
 move_case none still
 
-# ---- 6. verdict -----------------------------------------------------------
+# ---- 6. render ------------------------------------------------------------
+# A frame of the world must be renderable, and it must contain the player: the
+# centre pixel of the saved frame is the player's marker, not the sky.
+note "render"
+ppm="build/frame.ppm"
+rm -f "$ppm"
+render_out="$(./build/wubu_engine.exe games duel-stadium player-1 --input fwd \
+                                              --render "$ppm" 2>&1)"
+echo "$render_out" | grep -q "rendered 1 marker(s)" \
+  || bad "render: no marker reported"
+[ -s "$ppm" ] || bad "render: no frame written"
+# The PPM header is "P6\n640 480\n255\n" = 15 bytes; the centre pixel of a
+# 640x480 frame sits at 15 + (240*640 + 320) * 3.
+off=$((15 + (240 * 640 + 320) * 3))
+centre="$(tail -c +$((off + 1)) "$ppm" | head -c 3 | od -An -tx1 | tr -d ' \n')"
+if [ "$centre" = "1a2430" ]; then
+  bad "render: centre pixel is sky -- the player was not drawn"
+else
+  ok "render: player drawn at frame centre (pixel $centre)"
+fi
+
+# ---- 7. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'
   exit 1

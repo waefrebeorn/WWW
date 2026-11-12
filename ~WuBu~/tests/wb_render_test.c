@@ -81,6 +81,43 @@ int main(void){
     int f3=wb_render_terrain(&fb,&cam,&plate);
     (void)f3;
 
+    /* ---- markers: the entity layer -------------------------------------- */
+    /* The world is an ECS of bodies, so the frame has to show bodies, not just
+     * terrain. A marker at the camera's look target must land on the screen
+     * centre; one behind the near plane and one far off to the side must not
+     * be drawn at all. */
+    wb_render_clear(&fb,bg);
+    float at_pt[3]={8.0f,0.0f,0.0f};            /* exactly cam.at */
+    int m1=wb_render_marker(&fb,&cam,at_pt,0.5f,0xFFE080);
+    CHECK(m1==1, "marker at the look target is drawn");
+    uint32_t centre_px=fb.pixels[(H/2)*W+(W/2)];
+    CHECK(centre_px!=bg, "marker at the look target lands on the screen centre");
+
+    /* the whole marker is the marker colour: no stray background inside it */
+    int marker_px=0;
+    for(int y=H/2-6;y<=H/2+6;y++) for(int x=W/2-6;x<=W/2+6;x++)
+        if(fb.pixels[y*W+x]!=bg) marker_px++;
+    CHECK(marker_px>20, "marker covers a disc, not a single pixel");
+
+    /* behind the near plane: nothing drawn. The point is the reflection of the
+     * look target through the eye, so it is the same distance away on the far
+     * side -- unambiguously behind the camera, with a sane up vector. */
+    wb_render_clear(&fb,bg);
+    wb_render_camera c2=cam;
+    float behind[3];
+    behind[0]=2.0f*cam.eye[0]-cam.at[0];
+    behind[1]=2.0f*cam.eye[1]-cam.at[1];
+    behind[2]=2.0f*cam.eye[2]-cam.at[2];
+    int m2=wb_render_marker(&fb,&c2,behind,0.5f,0xFFE080);
+    CHECK(m2==0, "marker behind the near plane is not drawn");
+    CHECK(count_painted(&fb,bg)==0, "nothing painted for a marker behind the camera");
+
+    /* far off to the side: outside the frustum, nothing drawn */
+    wb_render_clear(&fb,bg);
+    float aside[3]={8.0f,500.0f,0.0f};
+    int m3=wb_render_marker(&fb,&c2,aside,0.5f,0xFFE080);
+    CHECK(m3==0, "marker outside the frustum is not drawn");
+
     printf("=== RENDER TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

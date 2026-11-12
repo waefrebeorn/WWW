@@ -23,11 +23,33 @@
 
 static void err(const char *msg) { fprintf(stderr, "wb: %s\n", msg); }
 
+/* Write the framebuffer as a binary PPM (P6). No library, no dependency: it is
+ * the one image format that can be written in six lines of C. */
+static int write_ppm(const char *path, const wb_framebuffer *fb) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    if (fprintf(f, "P6\n%d %d\n255\n", fb->width, fb->height) < 0) {
+        fclose(f);
+        return -1;
+    }
+    for (int i = 0; i < fb->width * fb->height; i++) {
+        uint32_t c = fb->pixels[i];
+        unsigned char rgb[3] = {
+            (unsigned char)((c >> 16) & 0xFF),
+            (unsigned char)((c >> 8) & 0xFF),
+            (unsigned char)(c & 0xFF)
+        };
+        if (fwrite(rgb, 1, 3, f) != 3) { fclose(f); return -1; }
+    }
+    return fclose(f) == 0 ? 0 : -1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr,
                 "usage: %s <modes-root> <gametype> [player-id] "
-                "[--input fwd|back|left|right|jump|sprint|none]\n", argv[0]);
+                "[--input fwd|back|left|right|jump|sprint|none] "
+                "[--render out.ppm]\n", argv[0]);
         return 2;
     }
     const char *root   = argv[1];
@@ -59,6 +81,13 @@ int main(int argc, char **argv) {
     }
     if (input_code >= 0) wb_host_input_key_down(h, input_code);
 
+    /* An optional path to write the last frame to, as a PPM. This is how the
+     * headless binary shows what it rendered: there is no window to look at. */
+    const char *render_path = NULL;
+    for (int i = 4; i < argc - 1; i++) {
+        if (strcmp(argv[i], "--render") == 0) render_path = argv[i + 1];
+    }
+
     printf("wb: in '%s' as %s (instance %s)\n",
            wb_host_mode(h), player, wb_host_instance(h));
 
@@ -80,6 +109,20 @@ int main(int argc, char **argv) {
     unsigned long overruns = wb_host_prof_overruns(h);
     double p[3] = {0, 0, 0};
     int have_pos = (wb_host_player_pos(h, p) == 0);
+
+    int drawn = -1;
+    if (render_path) {
+        static uint32_t pixels[640 * 480];
+        wb_framebuffer fb = { .pixels = pixels, .width = 640, .height = 480 };
+        drawn = wb_host_render(h, &fb);
+        if (drawn < 0) {
+            err("cannot render the frame");
+        } else if (write_ppm(render_path, &fb) != 0) {
+            fprintf(stderr, "wb: cannot write '%s'\n", render_path);
+        } else {
+            printf("wb: rendered %d marker(s) to %s\n", drawn, render_path);
+        }
+    }
     wb_host_close(h);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);

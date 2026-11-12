@@ -29,6 +29,7 @@
 #include "wb_input.h"
 #include "wb_mode.h"
 #include "wb_prof.h"
+#include "wb_render.h"
 #include "wb_worldspace.h"
 
 #ifdef __cplusplus
@@ -128,6 +129,16 @@ wb_camera *wb_host_camera(wb_host *h);
 
 /* The player's world position, for a renderer or a tool. -1 if unavailable. */
 int wb_host_player_pos(const wb_host *h, double p[3]);
+
+/* Render one frame of the mode's world into `fb`.
+ *
+ * The shipped world is an ECS of bodies, not terrain, so the frame is the entity
+ * layer: a marker at every live body's position, projected through the follow
+ * camera, with the player drawn brighter and larger. When the world grows
+ * terrain its plate goes down first and this stays the layer above it.
+ *
+ * Returns the number of markers drawn, or -1 on a bad argument. */
+int wb_host_render(wb_host *h, wb_framebuffer *fb);
 
 /* The mode's own wb.running flag: a script sets wb.running = false to stop the
  * host. Missing/falsey means keep running. */

@@ -28,6 +28,9 @@ typedef struct {
     int       height;
 } wb_framebuffer;
 
+/* The default clear color: a dark sky. A renderer may use its own. */
+#define WB_RENDER_SKY 0x1A2430u
+
 /* camera (world = meters, y-up) -- named wb_render_camera to avoid colliding
  * with the follow/orbit camera in wb_camera.h (both live in src/core). */
 typedef struct {
@@ -58,5 +61,20 @@ void wb_render_clear(wb_framebuffer *fb, uint32_t color);
 /* Draw a terrain plate from the camera. Returns face count rasterized. */
 int wb_render_terrain(wb_framebuffer *fb, const wb_render_camera *cam,
                       const wb_terrain_plate *plate);
+
+/* Draw a world-space marker: a filled disc at `pos`, `radius_m` across at one
+ * metre from the camera, shaded darker with distance so depth still reads.
+ *
+ * The engine's shipped world holds no terrain -- it is an ECS of bodies -- so
+ * this is the primitive that makes "a frame of the world" mean the world's
+ * ENTITIES rather than a stand-in landscape. Markers draw over whatever the
+ * terrain pass already wrote: the framebuffer exposes no depth buffer, so the
+ * entity layer is an overlay, not an occludee. When the world grows terrain the
+ * plate goes down first and this stays the layer above it.
+ *
+ * Returns 1 if the marker was drawn, 0 if it was behind the near plane or off
+ * screen. */
+int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
+                     const float pos[3], float radius_m, uint32_t color);
 
 #endif /* WB_RENDER_H */

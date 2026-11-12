@@ -66,6 +66,59 @@ void wb_render_clear(wb_framebuffer *fb, uint32_t color) {
     for (uint32_t i=0;i<n;i++) fb->pixels[i]=color;
 }
 
+/* Project a world point with the same view/projection the terrain pass uses.
+ * Returns 0 when the point is in front of the near plane, -1 otherwise. */
+static int wb_project(const wb_render_camera *cam, int W, int H,
+                      const float p[3], float *sx, float *sy, float *depth) {
+    mat4 view, proj;
+    m4_lookat(&view, cam->eye, cam->at, cam->up);
+    m4_perspective(&proj, cam->vfov_deg, (float)W/(float)H, cam->near_z, cam->far_z);
+    vec4 v = mulv(&view, p[0], p[1], p[2], 1.0f);
+    if (v.v[2] > -cam->near_z) return -1;              /* behind the near plane */
+    vec4 c = mulv(&proj, v.v[0], v.v[1], v.v[2], v.v[3]);
+    if (c.v[3] <= 1e-6f) return -1;
+    *sx = (c.v[0]/c.v[3]*0.5f + 0.5f) * (float)W;
+    *sy = (0.5f - c.v[1]/c.v[3]*0.5f) * (float)H;
+    *depth = -v.v[2];                                  /* positive near -> far */
+    return 0;
+}
+
+int wb_render_marker(wb_framebuffer *fb, const wb_render_camera *cam,
+                     const float pos[3], float radius_m, uint32_t color) {
+    int W=fb->width, H=fb->height;
+    float sx, sy, depth;
+    if (wb_project(cam, W, H, pos, &sx, &sy, &depth) != 0) return 0;
+
+    /* A sphere of radius r at view depth d subtends r/d of the half-height, so
+     * its pixel radius is (r/d) * f * H/2 with f the vertical focal length. */
+    float f = 1.0f / tanf(cam->vfov_deg * (3.14159265f/180.0f) * 0.5f);
+    float rp = (radius_m / depth) * f * (float)H * 0.5f;
+    if (!(rp > 0.5f)) return 0;
+
+    /* Depth cue: full brightness at the near plane, fading toward the far one,
+     * never below a quarter so a distant body stays visible. */
+    float b = 1.0f;
+    if (cam->far_z > cam->near_z) {
+        b = 1.0f - 0.75f * (depth - cam->near_z) / (cam->far_z - cam->near_z);
+        if (b < 0.25f) b = 0.25f;
+        if (b > 1.0f)  b = 1.0f;
+    }
+    uint32_t col = shade(color, b);
+
+    int minx=(int)floorf(sx-rp), maxx=(int)ceilf(sx+rp);
+    int miny=(int)floorf(sy-rp), maxy=(int)ceilf(sy+rp);
+    if(minx<0)minx=0;
+    if(miny<0)miny=0;
+    if(maxx>W)maxx=W;
+    if(maxy>H)maxy=H;
+    float r2 = rp*rp;
+    for (int y=miny;y<maxy;y++) for (int x=minx;x<maxx;x++) {
+        float dx=(float)x+0.5f-sx, dy=(float)y+0.5f-sy;
+        if (dx*dx+dy*dy <= r2) fb->pixels[(size_t)y*W+x]=col;
+    }
+    return 1;
+}
+
 /* one terrain plate's sample of world coordinate. Samples are grid 0..nx-1
  * with spacing 'scale' horizontally/vertically, height comes from the
  * caller's sample() signature (x,y,z filled; z is the height). We treat the
