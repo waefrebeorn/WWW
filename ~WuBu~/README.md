@@ -15,12 +15,14 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 88 gates, 8463 assertions
+mingw32-make test       # 89 gates, 8479 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
-mingw32-make run        # runs the omniverse-hub gametype
+mingw32-make run        # runs the omniverse-hub gametype (headless)
+mingw32-make play       # the same, in a window, driven by the keyboard
 ./build/wubu_engine.exe games omniverse-hub
 ./build/wubu_engine.exe games duel-stadium player-1 --input fwd   # drive the player
 ./build/wubu_engine.exe games duel-stadium --render out.ppm       # draw a frame
+./build/wubu_engine.exe games duel-stadium --window --frames 60   # window, 60 frames
 ```
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`

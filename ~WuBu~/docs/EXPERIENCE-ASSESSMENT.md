@@ -13,7 +13,7 @@ reproducible from the commands in §9.
 ## 1. TL;DR
 
 1. **The engine is a capability library, not a product.** 93 modules, 17k LOC of
-   core C11, 88 gates / 8,463 assertions, 0 fail — and **only 19 of 93 modules are
+   core C11, 89 gates / 8,479 assertions, 0 fail — and **only 19 of 93 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -45,7 +45,7 @@ reproducible from the commands in §9.
 | Core `.c` / `.h` | 97 / 92 |
 | Core LOC | 11,453 + 5,553 = **17,006** |
 | Other src (`lua`, `net`, `lv`) | 1,053 + 1,028 + 6,807 LOC |
-| Gates | **88 results / 8,463 assertions / 0 fail** |
+| Gates | **89 results / 8,479 assertions / 0 fail** |
 | Test sources | 86 |
 | Pads | 113 → **9 shipped, 47 partial, 57 todo** |
 
@@ -218,6 +218,11 @@ The single largest gap. The shipped binary touches 11 modules; 81 are off-path.
 This is not a criticism of the modules — most are genuinely good — it is the
 difference between a library and a product:
 
+- **No platform layer — now closed.** `src/` held only `core`, `lua`, `lv` and
+  `net`: there was no window, no framebuffer presentation and no input source
+  anywhere, so the engine could render a frame and had nowhere to put it.
+  `src/platform/wb_win32.{h,c}` is that layer — a window, GDI presentation, and
+  OS events into `wb_input`.
 - **No render path — now closed.** `wb_render` (software rasteriser) was a leaf;
   the host never drew a frame. The host now renders every mode into a framebuffer:
   `wb_host_render` clears to sky, then draws a marker at every live body through
@@ -439,8 +444,20 @@ Done so far:
   render gate. `--render out.ppm` writes the frame, and `make slice` asserts the
   centre pixel is the player. Reachability moved from 11 to 19 of 93.
 
-- **Exit:** `make run` opens a window, draws a frame from the world, and the
-  player moves under input. No new gameplay.
+- **The platform layer exists and is wired in.** `src/platform/wb_win32.{h,c}` is
+  the first file in the repo that knows what an OS is: a window whose client area
+  is exactly the framebuffer, GDI presentation of an XRGB8888 DIB section, and
+  keyboard/mouse events fed straight into the host's `wb_input`. `--window` opens
+  it and renders every frame into it; `--frames N` makes it self-terminating so
+  it can be smoke-tested. A real person at a keyboard now drives the same
+  input → controller → velocity path that `--input` drives headlessly.
+  `test-window` covers it: 16 checks over the HWND, the framebuffer, the message
+  → input path and the close path.
+
+- **Exit:** met for the shipped path. `make play` opens a window, draws a frame
+  of the world into it, and the player moves under keyboard input. No new
+  gameplay. What is still missing is a *game*: there is nothing to do in the
+  world yet.
 
 ### Phase 2 — The player loop
 Add the missing stages: **objective** (win/lose/score/timer), **onboarding**,
@@ -633,7 +650,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 88 gate results / 8,463 assertions / 0 fail
+mingw32-make test            # 89 gate results / 8,479 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

@@ -17,8 +17,10 @@
  */
 #include "wb_host.h"
 #include "wb_script.h"
+#include "wb_win32.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void err(const char *msg) { fprintf(stderr, "wb: %s\n", msg); }
@@ -49,17 +51,35 @@ int main(int argc, char **argv) {
         fprintf(stderr,
                 "usage: %s <modes-root> <gametype> [player-id] "
                 "[--input fwd|back|left|right|jump|sprint|none] "
-                "[--render out.ppm]\n", argv[0]);
+                "[--render out.ppm] [--window] [--frames N]\n"
+                "  --window   open a window and drive it with the keyboard/mouse\n"
+                "  --frames N run at most N frames, then exit (with --window)\n",
+                argv[0]);
         return 2;
     }
     const char *root   = argv[1];
     const char *mode   = argv[2];
-    const char *player = argc > 3 ? argv[3] : "player-1";
-
-    /* The optional action to hold down for the whole run. */
+    /* Options start with `--`. The player id is the first argument that is not
+     * one, and not the value of one -- so `--input fwd` does not make "fwd" the
+     * player and `--window` does not either. */
+    const char *player = "player-1";
     const char *input_name = "none";
-    for (int i = 4; i < argc - 1; i++) {
-        if (strcmp(argv[i], "--input") == 0) input_name = argv[i + 1];
+    const char *render_path = NULL;
+    int use_window = 0, max_frames = 0, player_set = 0;
+
+    for (int i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--input") == 0 && i + 1 < argc) {
+            input_name = argv[++i];
+        } else if (strcmp(argv[i], "--render") == 0 && i + 1 < argc) {
+            render_path = argv[++i];
+        } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            max_frames = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--window") == 0) {
+            use_window = 1;
+        } else if (!player_set) {
+            player = argv[i];
+            player_set = 1;
+        }
     }
 
     char why[1024];
@@ -81,24 +101,42 @@ int main(int argc, char **argv) {
     }
     if (input_code >= 0) wb_host_input_key_down(h, input_code);
 
-    /* An optional path to write the last frame to, as a PPM. This is how the
-     * headless binary shows what it rendered: there is no window to look at. */
-    const char *render_path = NULL;
-    for (int i = 4; i < argc - 1; i++) {
-        if (strcmp(argv[i], "--render") == 0) render_path = argv[i + 1];
+    /* The window is the platform layer: its framebuffer is what gets presented,
+     * and its keyboard/mouse events go straight into the host's input state, so
+     * a real person drives the same path `--input` drives headlessly. */
+    wb_win32 *win = NULL;
+    wb_framebuffer *wfb = NULL;
+    if (use_window) {
+        win = wb_win32_open(960, 600, "WuBu Engine", wb_host_input(h),
+                            why, sizeof why);
+        if (!win) {
+            err(why);
+            wb_host_close(h);
+            return 1;
+        }
+        wfb = wb_win32_framebuffer(win);
+        printf("wb: window %dx%d\n", wb_win32_width(win), wb_win32_height(win));
     }
 
     printf("wb: in '%s' as %s (instance %s)\n",
            wb_host_mode(h), player, wb_host_instance(h));
 
-    int guard = 0;
+    int guard = 0, frames = 0;
     while (guard++ < 120000 && wb_host_running(h)) {
+        if (win && wb_win32_pump(win) == 0) break;
         if (wb_host_step(h, (float)WB_HOST_FIXED_DT) < 0) {
             const char *e = wb_host_error(h);
             err(e ? e : "mode step failed");
             break;
         }
+        if (win) {
+            wb_host_render(h, wfb);
+            wb_win32_present(win);
+        }
+        frames++;
+        if (max_frames > 0 && frames >= max_frames) break;
     }
+    if (win) printf("wb: window closed after %d frames\n", frames);
 
     /* Physics is integrated by the host, once per fixed step, so the caller only
      * paces frames. */
@@ -124,6 +162,7 @@ int main(int argc, char **argv) {
         }
     }
     wb_host_close(h);
+    if (win) wb_win32_close(win);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);
     if (have_pos)
