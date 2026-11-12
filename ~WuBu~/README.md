@@ -73,6 +73,13 @@ gametype host. `docs/meta-engine-assessment.md` is the strategic read: the five
 platform pillars and the slice roadmap. `../docs/WWW.md` is the doctrine of the
 space: what it is for, and what it refuses to be.
 
+`docs/EXPERIENCE-ASSESSMENT.md` is the companion read. It measures how much of
+the engine the shipped binary actually reaches — **11 of 92 modules** — separates
+the player experience from the creator experience, and proposes the validation
+mechanisms (vertical-slice gate, bot playtests, experience telemetry, the
+creator-workflow gate) that module gates cannot provide. Run
+`python3 tools/wiring_report.py` to reproduce the wiring and reachability numbers.
+
 A gametype is a declared, parameterisable package (`mode.json` + an entry
 script + a typed config schema). The engine knows modes, configs, spawns and
 instances — it does not know games. That ignorance is what lets all gametypes
