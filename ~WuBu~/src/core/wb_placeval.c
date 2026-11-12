@@ -86,9 +86,9 @@ int wb_placeval_check(const wb_place *pl, const wb_placeval_ctx *ctx, uint32_t *
             return -1;
         }
     }
-    uint32_t depth = wb_qkey_level(pl->cells[0]);
+    uint32_t depth = wb_qkey_depth(pl->cells[0]);
     for (uint32_t i = 1; i < pl->n; i++) {
-        if (wb_qkey_level(pl->cells[i]) != depth) {
+        if (wb_qkey_depth(pl->cells[i]) != depth) {
             if (reason) *reason = WB_PLACEVAL_ERR_MIXED_DEPTH;
             return -1;
         }

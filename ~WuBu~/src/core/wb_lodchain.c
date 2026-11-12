@@ -50,7 +50,7 @@ int wb_lodchain_imposter(const wb_lodchain *c, uint32_t i, const char *cell,
                          char *out, size_t cap) {
     if (!c || !cell || !out || cap == 0) return -1;
     if (i >= c->n) return -1;
-    uint32_t cd = wb_qkey_level(cell);
+    uint32_t cd = wb_qkey_depth(cell);
     uint32_t target = c->levels[i].depth;
     /* a level cannot invent detail: a cell shallower than the level's depth has
      * no representation there */
@@ -58,9 +58,9 @@ int wb_lodchain_imposter(const wb_lodchain *c, uint32_t i, const char *cell,
 
     char cur[WB_QKEY_MAX];
     snprintf(cur, sizeof cur, "%s", cell);
-    while (wb_qkey_level(cur) > target) {
+    while (wb_qkey_depth(cur) > target) {
         char parent[WB_QKEY_MAX];
-        if (wb_qkey_parent(cur, parent, sizeof parent) != 0) return -1;
+        if (wb_qkey_up(cur, parent, sizeof parent) != 0) return -1;
         memcpy(cur, parent, sizeof cur);
     }
     if (strlen(cur) + 1 > cap) return -1;
@@ -70,7 +70,7 @@ int wb_lodchain_imposter(const wb_lodchain *c, uint32_t i, const char *cell,
 
 int wb_lodchain_budget(const wb_lodchain *c, const char *cell, uint32_t *budget) {
     if (!c || !cell || !budget) return -1;
-    int i = wb_lodchain_level_for_depth(c, wb_qkey_level(cell));
+    int i = wb_lodchain_level_for_depth(c, wb_qkey_depth(cell));
     if (i < 0) return -1;
     *budget = c->levels[i].budget;
     return 0;

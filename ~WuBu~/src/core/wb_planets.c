@@ -98,7 +98,7 @@ uint32_t wb_planets_levels(const wb_planets *p, uint32_t planet) {
 int wb_planets_level_for(const wb_planets *p, uint32_t planet, const char *cell) {
     if (!p || !p->planets || planet >= p->n) return -1;
     if (!cell || !wb_qkey_valid(cell)) return -1;
-    uint32_t depth = wb_qkey_level(cell);
+    uint32_t depth = wb_qkey_depth(cell);
     if (depth < p->universe_depth) return -1;     /* above the universe: nowhere */
 
     const wb_lodchain *c = &p->planets[planet].chain;

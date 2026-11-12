@@ -40,9 +40,9 @@ int wb_interest_aggregate(const wb_interest_set *s, wb_interest_set *out) {
         /* walk to the root, adding every ancestor */
         char cur[WB_QKEY_MAX];
         snprintf(cur, sizeof cur, "%s", s->cells[i]);
-        while (wb_qkey_level(cur) > 0) {
+        while (wb_qkey_depth(cur) > 0) {
             char parent[WB_QKEY_MAX];
-            if (wb_qkey_parent(cur, parent, sizeof parent) != 0) return -1;
+            if (wb_qkey_up(cur, parent, sizeof parent) != 0) return -1;
             if (wb_interest_add(out, parent) != 0) return -1;
             memcpy(cur, parent, sizeof cur);
         }
@@ -55,7 +55,7 @@ int wb_interest_refine(const wb_interest_set *s, wb_interest_set *out) {
     wb_interest_init(out);
     for (uint32_t i = 0; i < s->n; i++) {
         const char *c = s->cells[i];
-        uint32_t level = wb_qkey_level(c);
+        uint32_t level = wb_qkey_depth(c);
         if (level + 1 >= WB_QKEY_MAX) continue;              /* cannot go deeper */
         /* append each of the four child digits */
         for (char d = '0'; d <= '3'; d++) {
@@ -76,13 +76,13 @@ int wb_interest_coarsen(const wb_interest_set *s, uint32_t level, wb_interest_se
     wb_interest_init(out);
     for (uint32_t i = 0; i < s->n; i++) {
         const char *c = s->cells[i];
-        uint32_t cl = wb_qkey_level(c);
+        uint32_t cl = wb_qkey_depth(c);
         if (cl < level) continue;                            /* too shallow to have one */
         char cur[WB_QKEY_MAX];
         snprintf(cur, sizeof cur, "%s", c);
-        while (wb_qkey_level(cur) > level) {
+        while (wb_qkey_depth(cur) > level) {
             char parent[WB_QKEY_MAX];
-            if (wb_qkey_parent(cur, parent, sizeof parent) != 0) return -1;
+            if (wb_qkey_up(cur, parent, sizeof parent) != 0) return -1;
             memcpy(cur, parent, sizeof cur);
         }
         if (wb_interest_add(out, cur) != 0) return -1;

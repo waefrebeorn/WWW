@@ -109,7 +109,7 @@ int wb_persist_owner_for_depth(const wb_persist_plan *p, uint32_t depth) {
 
 int wb_persist_owner(const wb_persist_plan *p, const char *cell) {
     if (!p || !cell || !wb_qkey_valid(cell)) return -1;
-    return wb_persist_owner_for_depth(p, wb_qkey_level(cell));
+    return wb_persist_owner_for_depth(p, wb_qkey_depth(cell));
 }
 
 int wb_persist_source(const wb_persist_plan *p, uint32_t level) {
@@ -131,7 +131,7 @@ int wb_persist_write(wb_persist_plan *p, const char *cell, uint32_t level,
         return -1;
     /* Only the owning level may accept the write -- a coarser level would lose
      * the finer ones' state, a finer one would store an ancestor's. */
-    if (wb_persist_owner_for_depth(p, wb_qkey_level(cell)) != (int)level)
+    if (wb_persist_owner_for_depth(p, wb_qkey_depth(cell)) != (int)level)
         return -1;
 
     p->levels[level].written = 1;

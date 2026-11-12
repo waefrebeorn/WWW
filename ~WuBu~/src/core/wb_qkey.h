@@ -17,6 +17,16 @@
  * Level 0 is the whole world and has the empty quadkey "", which contains
  * everything -- useful for "the entire planet".
  *
+ * TWO QUADKEYS. This module speaks the DIGIT STRING form: a quadkey is a
+ * `const char *` of '0'..'3'. `wb_spatial.h` speaks a DIFFERENT form: a quadkey
+ * is a `uint64_t` morton-coded handle in the typedef `wb_qkey`. They are two
+ * representations of the same grid and they do not convert into each other
+ * anywhere in the tree -- the tile store and the spatial core use the handle,
+ * and the nesting/geo layer built here uses the string. That split is known debt
+ * (see docs/EXPERIENCE-ASSESSMENT.md); until it is closed, the two must not share
+ * a function name. Hence `wb_qkey_depth`/`wb_qkey_up` here rather than
+ * `wb_qkey_level`/`wb_qkey_parent`, which belong to the handle.
+ *
  * C11, no deps. Deterministic.
  */
 #ifndef WB_QKEY_H
@@ -36,9 +46,11 @@ int wb_qkey_encode(uint32_t level, uint32_t col, uint32_t row, char *out, size_t
  * key. Any output pointer may be NULL. */
 int wb_qkey_decode(const char *qk, uint32_t *level, uint32_t *col, uint32_t *row);
 
-/* The level (length) of a quadkey, or 0 if it is not a valid key. Note that a
- * valid root is also level 0, so callers that care should wb_qkey_decode. */
-uint32_t wb_qkey_level(const char *qk);
+/* The depth (length) of a quadkey string, or 0 if it is not a valid key. Note that
+ * a valid root is also depth 0, so callers that care should wb_qkey_decode.
+ * Named `depth` rather than `level` because wb_spatial.h's handle-based quadkey
+ * already owns wb_qkey_level(wb_qkey) -- see the note at the top of this file. */
+uint32_t wb_qkey_depth(const char *qk);
 
 int wb_qkey_equal(const char *a, const char *b);
 int wb_qkey_contains(const char *a, const char *b);   /* a contains b, or they are equal */
@@ -48,9 +60,9 @@ int wb_qkey_adjacent(const char *a, const char *b);   /* same level, sharing an 
 /* The smallest quadkey containing both a and b. Returns 0 on success. */
 int wb_qkey_enclose(const char *a, const char *b, char *out, size_t cap);
 
-/* The parent of a quadkey (one level up). Returns 0 on success, -1 if `qk` is
- * already the root. */
-int wb_qkey_parent(const char *qk, char *out, size_t cap);
+/* The parent of a quadkey string (one level up). Returns 0 on success, -1 if `qk`
+ * is already the root. Named `up` for the same reason `depth` is not `level`. */
+int wb_qkey_up(const char *qk, char *out, size_t cap);
 
 /* 1 if `qk` is a valid quadkey. */
 int wb_qkey_valid(const char *qk);

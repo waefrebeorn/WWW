@@ -14,7 +14,7 @@ int wb_qkey_valid(const char *qk) {
     return 1;
 }
 
-uint32_t wb_qkey_level(const char *qk) {
+uint32_t wb_qkey_depth(const char *qk) {
     if (!wb_qkey_valid(qk)) return 0;
     return (uint32_t)strlen(qk);
 }
@@ -85,7 +85,7 @@ int wb_qkey_enclose(const char *a, const char *b, char *out, size_t cap) {
     return 0;
 }
 
-int wb_qkey_parent(const char *qk, char *out, size_t cap) {
+int wb_qkey_up(const char *qk, char *out, size_t cap) {
     if (!wb_qkey_valid(qk)) return -1;
     if (!out || cap == 0) return -1;
     size_t n = strlen(qk);

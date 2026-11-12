@@ -74,8 +74,8 @@ int main(void) {
     CHECK(wb_qkey_valid("0123") == 1, "a normal key is valid");
     CHECK(wb_qkey_valid("0124") == 0, "a digit above 3 is invalid");
     CHECK(wb_qkey_valid(NULL) == 0, "a NULL key is invalid");
-    CHECK(wb_qkey_level("") == 0, "the root is level 0");
-    CHECK(wb_qkey_level("0123") == 4, "the level is the length");
+    CHECK(wb_qkey_depth("") == 0, "the root is level 0");
+    CHECK(wb_qkey_depth("0123") == 4, "the level is the length");
 
     /* ---- containment ---- */
     CHECK(wb_qkey_contains("", "0123") == 1, "the root contains everything");
@@ -129,13 +129,13 @@ int main(void) {
 
     /* ---- parent ---- */
     char p[WB_QKEY_MAX];
-    CHECK(wb_qkey_parent("0", p, sizeof p) == 0 && strcmp(p, "") == 0, "the parent of a half is the root");
-    CHECK(wb_qkey_parent("01", p, sizeof p) == 0 && strcmp(p, "0") == 0, "a two-level parent");
-    CHECK(wb_qkey_parent("0123", p, sizeof p) == 0 && strcmp(p, "012") == 0, "a four-level parent");
-    CHECK(wb_qkey_parent("", p, sizeof p) == -1, "the root has no parent");
-    CHECK(wb_qkey_parent("01", p, 1) == -1, "a one-byte buffer is refused");
-    CHECK(wb_qkey_parent("01", NULL, 10) == -1, "a NULL output is refused");
-    CHECK(wb_qkey_parent(NULL, p, sizeof p) == -1, "a NULL key is refused");
+    CHECK(wb_qkey_up("0", p, sizeof p) == 0 && strcmp(p, "") == 0, "the parent of a half is the root");
+    CHECK(wb_qkey_up("01", p, sizeof p) == 0 && strcmp(p, "0") == 0, "a two-level parent");
+    CHECK(wb_qkey_up("0123", p, sizeof p) == 0 && strcmp(p, "012") == 0, "a four-level parent");
+    CHECK(wb_qkey_up("", p, sizeof p) == -1, "the root has no parent");
+    CHECK(wb_qkey_up("01", p, 1) == -1, "a one-byte buffer is refused");
+    CHECK(wb_qkey_up("01", NULL, 10) == -1, "a NULL output is refused");
+    CHECK(wb_qkey_up(NULL, p, sizeof p) == -1, "a NULL key is refused");
 
     /* ---- determinism ---- */
     char d1[WB_QKEY_MAX], d2[WB_QKEY_MAX];
