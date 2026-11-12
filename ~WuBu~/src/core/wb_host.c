@@ -39,6 +39,8 @@ struct wb_host {
     wb_host_keys   keys;        /* key map */
     wb_objective   objective;   /* the match objective (LP-114), if any */
     int            has_objective;
+    char           hint[WB_MODE_CFG_VALUE];  /* onboarding line, from mode.json */
+    double         hint_seconds;             /* how long it stays up, 0 = never */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -271,6 +273,12 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
                 goto fail;
             }
         }
+        /* Onboarding: the mode's own hint line and how long it stays up. Data,
+         * like the objective -- a mode is told what to teach, not how. */
+        snprintf(h->hint, sizeof h->hint, "%s",
+                 wb_mode_config_get_string(mf, &cfg, "hint", ""));
+        h->hint_seconds = wb_mode_config_get_float(
+                              mf, &cfg, "hint_seconds", 0.0);
     }
 
     h->err[0] = 0;
@@ -506,6 +514,30 @@ const char *wb_host_objective_state_name(const wb_host *h) {
     }
 }
 
+/* ------------------------------------------------------- elapsed time */
+
+/* Seconds of SIMULATION time since the host opened. The objective's own clock
+ * when there is one, else the tick count -- so a mode without an objective still
+ * has a clock to put things on. */
+double wb_host_elapsed(const wb_host *h) {
+    if (!h) return 0.0;
+    if (h->has_objective) return wb_objective_elapsed(&h->objective);
+    return (double)h->ticks * WB_HOST_FIXED_DT;
+}
+
+/* ---------------------------------------------------------- onboarding */
+
+const char *wb_host_hint(const wb_host *h) {
+    return (h && h->hint[0]) ? h->hint : NULL;
+}
+
+/* 1 while the mode's hint should be on screen: it has text, it asked for a
+ * duration, and that duration has not run out. */
+int wb_host_hint_visible(const wb_host *h) {
+    if (!h || !h->hint[0] || h->hint_seconds <= 0.0) return 0;
+    return wb_host_elapsed(h) < h->hint_seconds;
+}
+
 /* ---- Input and the player controller ------------------------------------- */
 
 wb_input *wb_host_input(wb_host *h) { return h ? &h->in : NULL; }
@@ -603,6 +635,11 @@ int wb_host_render(wb_host *h, wb_framebuffer *fb) {
                      wb_host_objective_score_of(h, 0),
                      wb_host_objective_score_of(h, 1),
                      wb_host_objective_clock(h), 0xFFF2C0, 2);
+
+    /* Onboarding goes on last of all: a first-time player is told what to do,
+     * for as long as the mode asked. */
+    if (wb_host_hint_visible(h))
+        wb_hud_hint(fb, h->hint, 0xFFF2C0, 1);
 
     return drawn;
 }

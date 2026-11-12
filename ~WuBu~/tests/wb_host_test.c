@@ -79,7 +79,9 @@ static const char *kStadiumJson =
     "    { \"name\": \"objective_rule\", \"type\": \"int\", \"min\": 0, \"max\": 3, \"default\": \"1\" },\n"
     "    { \"name\": \"objective_target\", \"type\": \"int\", \"min\": 1, \"max\": 100, \"default\": \"10\" },\n"
     "    { \"name\": \"objective_time_limit\", \"type\": \"float\", \"min\": 0, \"max\": 3600, \"default\": \"120\" },\n"
-    "    { \"name\": \"objective_sides\", \"type\": \"int\", \"min\": 2, \"max\": 8, \"default\": \"2\" }\n"
+    "    { \"name\": \"objective_sides\", \"type\": \"int\", \"min\": 2, \"max\": 8, \"default\": \"2\" },\n"
+    "    { \"name\": \"hint\", \"type\": \"string\", \"default\": \"WASD TO MOVE\" },\n"
+    "    { \"name\": \"hint_seconds\", \"type\": \"float\", \"min\": 0, \"max\": 600, \"default\": \"12\" }\n"
     "  ]\n"
     "}\n";
 
@@ -223,6 +225,16 @@ int main(void) {
         CHECK(ink > 0, "a frame of the world has content");
         CHECK(px[12 * 640 + 14] == 0xFFF2C0,
               "the HUD panel is drawn into the frame");
+
+        /* Onboarding: the hint comes from the mode's own manifest and goes on
+         * screen while the match is young. */
+        CHECK(wb_host_hint(h) != NULL && strcmp(wb_host_hint(h), "WASD TO MOVE") == 0,
+              "the mode's hint is read from its manifest");
+        CHECK(wb_host_hint_visible(h) == 1,
+              "the hint is up at the start of the match");
+        CHECK(wb_host_elapsed(h) == 0.0, "no sim time has passed yet");
+        wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        CHECK(wb_host_elapsed(h) > 0.0, "sim time advances with the steps");
         wb_host_close(h);
     }
 
@@ -245,6 +257,10 @@ int main(void) {
         wb_host_render(h, &fb2);
         CHECK(px2[12 * 640 + 14] != 0xFFF2C0,
               "a mode without an objective draws no match panel");
+        CHECK(wb_host_hint(h) == NULL, "a mode with no hint declares none");
+        CHECK(wb_host_hint_visible(h) == 0, "no hint is shown for such a mode");
+        /* A mode with no objective still has a clock to put things on. */
+        CHECK(wb_host_elapsed(h) == 0.0, "the hub starts at zero");
         wb_host_close(h);
     }
 

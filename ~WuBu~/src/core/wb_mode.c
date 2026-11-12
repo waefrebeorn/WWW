@@ -261,6 +261,16 @@ int wb_mode_config_get_bool(const wb_mode_manifest *m, const wb_mode_config *c,
     return b;
 }
 
+const char *wb_mode_config_get_string(const wb_mode_manifest *m,
+                                      const wb_mode_config *c,
+                                      const char *name, const char *dflt) {
+    const wb_mode_cfg_desc *d = find_desc(m, name);
+    const wb_mode_cfg_value *v = find_value(c, name);
+    if (v) return v->value;
+    if (!d || d->type != WB_MODE_CFG_STRING) return dflt;
+    return d->dflt;
+}
+
 void wb_mode_config_defaults(const wb_mode_manifest *m, wb_mode_config *out) {
     memset(out, 0, sizeof *out);
     if (!m) return;

@@ -120,6 +120,15 @@ uint32_t wb_host_objective_score_of(const wb_host *h, uint32_t side);
 double   wb_host_objective_clock(const wb_host *h);
 const char *wb_host_objective_state_name(const wb_host *h);
 
+/* Seconds of simulation time since the host opened -- the objective's clock when
+ * there is one, else the tick count. */
+double   wb_host_elapsed(const wb_host *h);
+
+/* The mode's onboarding line (NULL when it declared none) and whether it should
+ * be on screen right now. */
+const char *wb_host_hint(const wb_host *h);
+int       wb_host_hint_visible(const wb_host *h);
+
 /* The frame profiler (LP-01), covering every host step. Valid for the host's
  * lifetime; the caller must not dispose it. */
 wb_prof *wb_host_profiler(wb_host *h);

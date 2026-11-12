@@ -110,7 +110,10 @@ int    wb_mode_config_get_int(const wb_mode_manifest *m, const wb_mode_config *c
 double wb_mode_config_get_float(const wb_mode_manifest *m, const wb_mode_config *c,
                                 const char *name, double dflt);
 int    wb_mode_config_get_bool(const wb_mode_manifest *m, const wb_mode_config *c,
-                               const char *name, int dflt);
+                                const char *name, int dflt);
+const char *wb_mode_config_get_string(const wb_mode_manifest *m,
+                                      const wb_mode_config *c,
+                                      const char *name, const char *dflt);
 
 /* Fill `out` with every schema default -- the "no config supplied" case. */
 void wb_mode_config_defaults(const wb_mode_manifest *m, wb_mode_config *out);

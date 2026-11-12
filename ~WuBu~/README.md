@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 91 gates, 8581 assertions
+mingw32-make test       # 91 gates, 8597 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -55,6 +55,16 @@ CLOCK 117.1
 The font is a 5x7 bitmap — uppercase and digits only. Text shaping (kerning,
 ligatures, bidi, non-Latin scripts) is LP-42's own hard sub-problem and is not
 solved here; the HUD is the stone that makes the rest of the UI stack visible.
+
+A mode may also declare an **onboarding hint** (`hint` and `hint_seconds` in
+`mode.json`). The host draws it centred along the bottom edge for that long, over
+a dark plate, so a first-time player is told what to do:
+
+```
+WASD TO MOVE - SPACE TO JUMP - SHIFT TO SPRINT
+```
+
+A mode that declares no hint shows none.
 
 `make all` cannot create `build/` itself: make spawns a restricted `mkdir.exe`
 that Windows refuses. Create the directory once in the shell and the makefile

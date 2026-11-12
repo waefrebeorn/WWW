@@ -155,3 +155,17 @@ void wb_hud_match(wb_framebuffer *fb, int x, int y, const char *state,
     wb_hud_row(fb, x, y + lh,                 "SCORE", score,               color, scale);
     wb_hud_row(fb, x, y + lh * 2,             "CLOCK", clock_s_buf,         color, scale);
 }
+
+void wb_hud_hint(wb_framebuffer *fb, const char *text, uint32_t fg, int scale) {
+    if (!fb || !fb->pixels || !text || !text[0]) return;
+    if (scale < 1) scale = 1;
+    int w = wb_hud_text_width(text, scale);
+    int h = wb_hud_line_height(scale);
+    if (w <= 0 || fb->width <= 0 || fb->height <= 0) return;
+
+    int x = (fb->width - w) / 2;
+    int y = fb->height - h - 12;
+    /* The plate, then the text on top: the hint must read over any world. */
+    wb_hud_rect(fb, x - 4, y - 3, w + 8, h + 6, 0x101418);
+    wb_hud_text(fb, x, y, text, fg, scale);
+}

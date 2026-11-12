@@ -13,7 +13,7 @@ reproducible from the commands in §9.
 ## 1. TL;DR
 
 1. **The engine is a capability library, not a product.** 95 modules, 18k LOC of
-   core C11, 91 gates / 8,581 assertions, 0 fail — and **only 21 of 95 modules are
+   core C11, 91 gates / 8,597 assertions, 0 fail — and **only 21 of 95 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -45,7 +45,7 @@ reproducible from the commands in §9.
 | Core `.c` / `.h` | 100 / 95 |
 | Core LOC | 12,300 + 5,924 = **18,224** |
 | Other src (`lua`, `net`, `lv`, `platform`) | 1,190 + 1,028 + 6,807 + 292 LOC |
-| Gates | **91 results / 8,581 assertions / 0 fail** |
+| Gates | **91 results / 8,597 assertions / 0 fail** |
 | Test sources | 88 |
 | Pads | 114 → **9 shipped, 48 partial, 57 todo** |
 
@@ -503,10 +503,24 @@ kerning, no ligatures, no bidi, no non-Latin script — everything non-Latin sta
 blocked on real shaping), no layout or containers, no retained widget tree and no
 focus chain. An immediate-mode stack is the next stone.
 
-  What remains in this phase is the rest of the loop: **onboarding** (a first-time
-  player is told what to do), **animation and audio** (nothing moves or sounds
-  yet — the marker is a billboard), and the rest of **UI** (`LP-42`: a widget
-  stack, layout, a focus chain, and real text shaping).
+  What remains in this phase is the rest of the loop: **animation and audio**
+  (nothing moves or sounds yet — the marker is a billboard), and the rest of
+  **UI** (`LP-42`: a widget stack, layout, a focus chain, and real text shaping).
+
+**Onboarding is shipped.** A first-time player is now told what to do, and the
+mode decides what to teach rather than the engine hardcoding it: `duel-stadium`
+declares `hint` ("WASD TO MOVE - SPACE TO JUMP - SHIFT TO SPRINT") and
+`hint_seconds` (12) in its manifest, the host reads them through the same config
+schema as the objective, and `wb_host_render` draws the line centred along the
+bottom edge for that long — over a dark plate, so it reads whatever the world is
+doing behind it. A mode that declares no hint shows none. The slice renders a
+frame at tick 60 and asserts the plate's pixel, because a full-length run would
+have retired it.
+
+Two small additions made that possible, both general: `wb_mode_config_get_string`
+(the schema had int/float/bool getters and no string one) and `wb_host_elapsed`
+(seconds of sim time — the objective's clock when there is one, else the tick
+count, so a mode without an objective still has a clock to put things on).
 
 ### Phase 3 — The creator loop
 **Validation feedback** (M4), **hot reload**, **publish**, **creator analytics**
@@ -694,7 +708,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 91 gate results / 8,581 assertions / 0 fail
+mingw32-make test            # 91 gate results / 8,597 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

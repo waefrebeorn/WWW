@@ -172,7 +172,57 @@ int main(void) {
     wb_hud_text(&nil, 0, 0, "ABC", WHITE, 1);
     wb_hud_rect(&nil, 0, 0, 10, 10, WHITE);
     wb_hud_match(&nil, 0, 0, "X", 1, 1, 1.0, WHITE, 1);
+    wb_hud_hint(&nil, "WASD", WHITE, 1);
     CHECK(1, "a NULL framebuffer is harmless");
+
+    /* ---- the hint ------------------------------------------------------- */
+    /* Empty and NULL text draw nothing at all. */
+    blank();
+    wb_hud_hint(&fb, "", WHITE, 1);
+    CHECK(lit() == 0, "an empty hint draws nothing");
+    wb_hud_hint(&fb, NULL, WHITE, 1);
+    CHECK(lit() == 0, "a NULL hint draws nothing");
+
+    /* A hint is centred horizontally and sits on the bottom edge. */
+    blank();
+    const char *hint = "WASD TO MOVE";
+    wb_hud_hint(&fb, hint, WHITE, 1);
+    CHECK(lit() > 0, "a hint draws");
+    int h_left = fb.width, h_right = -1, h_top = fb.height, h_bottom = -1;
+    for (int y = 0; y < fb.height; y++)
+        for (int x = 0; x < fb.width; x++)
+            if (fb.pixels[y * 320 + x]) {
+                if (x < h_left) h_left = x;
+                if (x > h_right) h_right = x;
+                if (y < h_top) h_top = y;
+                if (y > h_bottom) h_bottom = y;
+            }
+    int ink_w = h_right - h_left + 1;
+    int text_w = wb_hud_text_width(hint, 1);
+    CHECK(ink_w > text_w, "the hint is drawn over a plate wider than the text");
+    CHECK(h_left >= 4 && h_right < fb.width - 4,
+          "the plate stays inside the framebuffer");
+    /* The hint's text sits at height - line - 12; the plate overhangs it by 3
+     * above and 3 below, so its bottom row is 2 past the text's last row. */
+    int text_y = fb.height - wb_hud_line_height(1) - 12;
+    int text_x = (fb.width - text_w) / 2;
+    CHECK(h_bottom == text_y + wb_hud_line_height(1) + 2,
+          "the hint sits on the bottom edge with its margin");
+    /* Centred: the plate is (width - text_w)/2 - 4 on the left, and the mirror
+     * on the right, so the two margins differ by at most one pixel. */
+    int plate_l = (fb.width - text_w) / 2 - 4;
+    CHECK(h_left == plate_l, "the hint is centred horizontally");
+
+    /* The plate is drawn first and the text on top: the top-left of the text is
+     * lit where the plate alone would have been. */
+    CHECK(fb.pixels[text_y * 320 + text_x] == WHITE,
+          "the text is drawn on top of the plate");
+
+    /* Scale scales the hint too. */
+    blank();
+    wb_hud_hint(&fb, hint, WHITE, 3);
+    int hint3 = lit();
+    CHECK(hint3 > 0 && hint3 % 9 == 0, "a scaled hint's ink is a multiple of 9");
 
     printf("=== HUD TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

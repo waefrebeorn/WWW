@@ -180,6 +180,24 @@ else
   ok "hud: match panel drawn at the top-left (pixel $hud_px)"
 fi
 
+# Onboarding: a first-time player is told what to do. The hint is up for the
+# first `hint_seconds` of the match, so this frame is rendered at tick 60 -- a
+# full-length run would have retired it.
+hint_ppm="build/hint.ppm"
+rm -f "$hint_ppm"
+hint_out="$(./build/wubu_engine.exe games duel-stadium --frames 60 --render "$hint_ppm" 2>&1)"
+echo "$hint_out" | grep -q "rendered" || bad "hint: no frame written"
+# "WASD TO MOVE - SPACE TO JUMP - SHIFT TO SPRINT" is 46 glyphs: 46*6-1 = 275 wide,
+# so the text starts at (640-275)/2 = 182 and the plate at 182-4 = 178; the text
+# sits at 480 - 7 - 12 = 461 and the plate at 461-3 = 458.
+hint_off=$((15 + (458 * 640 + 178) * 3))
+hint_px="$(tail -c +$((hint_off + 1)) "$hint_ppm" | head -c 3 | od -An -tx1 | tr -d ' \n')"
+if [ "$hint_px" = "1a2430" ]; then
+  bad "hint: nothing was drawn for onboarding (pixel is sky)"
+else
+  ok "hint: onboarding line drawn at the bottom (pixel $hint_px)"
+fi
+
 # ---- 7. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'

@@ -66,6 +66,13 @@ void wb_hud_match(wb_framebuffer *fb, int x, int y, const char *state,
                   unsigned score_a, unsigned score_b, double clock_s,
                   uint32_t color, int scale);
 
+/* An onboarding hint, centred along the bottom edge: one line of text over a
+ * dark plate so it reads whatever the world is doing behind it. This is the
+ * whole of onboarding for now -- a first-time player is told what to do, and the
+ * mode's own text comes from its manifest rather than being hardcoded here.
+ * An empty or NULL text draws nothing. */
+void wb_hud_hint(wb_framebuffer *fb, const char *text, uint32_t fg, int scale);
+
 #ifdef __cplusplus
 }
 #endif
