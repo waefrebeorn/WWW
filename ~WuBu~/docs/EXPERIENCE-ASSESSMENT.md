@@ -13,7 +13,7 @@ reproducible from the commands in §9.
 ## 1. TL;DR
 
 1. **The engine is a capability library, not a product.** 92 modules, 17k LOC of
-   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 14 of 92 modules are
+   core C11, 88 gates / 8,457 assertions, 0 fail — and **only 15 of 92 modules are
    reachable from the shipped host**. The renderer, GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -62,9 +62,9 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **14 of 92 modules are reachable from the shipped path.**
+> **15 of 92 modules are reachable from the shipped path.**
 > `wb_det, wb_dist, wb_ecs, wb_host, wb_interp, wb_json, wb_lua_host, wb_mode,
-> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
+> wb_prof, wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_worldspace`
 
 Everything else — `wb_render`, `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_input`, `wb_camera`,
@@ -229,11 +229,11 @@ difference between a library and a product:
   leaves; the shipped experience is single-process and local.
 - **No input path.** `wb_input`, `wb_camera` and `wb_character` are leaves —
   which is why the demo has to drive the player with a script.
-- **No sim-timing path — now partly closed.** The fixed-timestep accumulator, the
-  per-tick divergence digest and the profiler hang off `wb_exp`, which the host
-  never calls. The host now owns the accumulator and the digest itself (see
-  Phase 1), so the shipped path steps at a fixed rate and can detect a
-  divergence; `wb_prof` is still off the path.
+- **No sim-timing path — now closed.** The fixed-timestep accumulator, the
+  per-tick divergence digest and the profiler all hung off `wb_exp`, which the
+  host never calls. The host now owns all three: it steps at a fixed rate, refreshes
+  the digest every tick, and profiles every frame with a budget on the frame zone
+  (see Phase 1). The whole LP-01/LP-03/LP-04/LP-05 cluster is on the shipped path.
 
 ### 4.2 Player-experience gaps
 
@@ -410,7 +410,12 @@ Done so far:
   and refreshes `wb_snap_digest_world` over position + velocity every tick. The
   CLI reports `ticks` and the digest, and `make slice` asserts that two identical
   runs produce the same digest — LP-03's contract, now checked on the shipped
-  path. Reachability moved from 11 to 14 of 92.
+  path.
+- **The host owns the frame profiler.** Every step is inside a `frame` zone, with
+  `script` and `physics` zones nested in it, and the frame zone carries the
+  LP-05 budget. The CLI reports the frame mean/p95/max and the overrun count.
+  Reachability moved from 11 to 15 of 92 — the whole LP-01/LP-03/LP-04/LP-05
+  cluster is now on the shipped path.
 
 - **Exit:** `make run` opens a window, draws a frame from the world, and the
   player moves under input. No new gameplay.

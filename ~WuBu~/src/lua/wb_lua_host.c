@@ -50,8 +50,16 @@ int main(int argc, char **argv) {
      * paces frames. */
     uint32_t ticks = wb_host_ticks(h);
     unsigned long long digest = (unsigned long long)wb_host_digest(h);
+    wb_prof_stat frame_stat;
+    int have_frame = (wb_host_prof_summary(h, "frame", &frame_stat) == 0);
+    unsigned long overruns = wb_host_prof_overruns(h);
     wb_host_close(h);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);
+    if (have_frame)
+        printf("wb: frame %.3f ms mean, %.3f ms p95, %.3f ms max "
+               "(%lu overruns)\n",
+               frame_stat.mean * 1000.0f, frame_stat.p95 * 1000.0f,
+               frame_stat.mmax * 1000.0f, overruns);
     return 0;
 }

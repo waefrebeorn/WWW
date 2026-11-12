@@ -4,6 +4,7 @@
 #include "wb_host.h"
 #include "wb_det.h"
 #include "wb_interp.h"
+#include "wb_prof.h"
 #include "wb_script.h"
 #include "wb_snap.h"
 #include "wb_space_bind.h"
@@ -27,6 +28,7 @@ struct wb_host {
     uint64_t       digest;      /* per-tick divergence digest (LP-03) */
     uint32_t       ticks;       /* whole sim steps taken */
     float          alpha;       /* render-interpolation alpha in [0,1) */
+    wb_prof       *prof;        /* frame profiler (LP-01/LP-05) */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -125,6 +127,15 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
     wb_world_setup_comps(h->world);
     wb_det_fixed_init(&h->acc, WB_HOST_FIXED_DT);
 
+    /* The profiler: every host step is inside a frame zone, and the frame zone
+     * carries the budget the budget gate (LP-05) measures against. */
+    h->prof = wb_prof_new(256);
+    if (!h->prof) {
+        snprintf(h->err, sizeof h->err, "out of memory");
+        goto fail;
+    }
+    wb_prof_set_budget(h->prof, "frame", (float)WB_HOST_FIXED_DT);
+
     /* The mode's script, bound to its world and carrying its space context --
      * so wb.add_spawn / wb.add_gate land in the mode's OWN world. */
     h->L = wb_script_create_state(h->world, h->ws, gamemode);
@@ -187,6 +198,7 @@ fail:
 void wb_host_close(wb_host *h) {
     if (!h) return;
     if (h->L) lua_close(h->L);
+    if (h->prof) wb_prof_dispose(h->prof);
     if (h->world) wb_world_destroy(h->world);
     if (h->ws) wb_worldspace_close(h->ws);
     free(h);
@@ -194,19 +206,32 @@ void wb_host_close(wb_host *h) {
 
 int wb_host_step(wb_host *h, float dt) {
     if (!h || !h->L) return -1;
+    /* One profiler frame per caller frame, whatever it buys. The frame zone is
+     * the budget gate's subject: the whole step must fit the frame it was given,
+     * not just the parts of it we thought to time. */
+    wb_prof *pr = h->prof;
+    wb_prof_begin_frame(pr);
+    wb_prof_zone_begin(pr, "frame");
     /* Consume whole fixed steps from the frame time; the remainder is the render
      * alpha, never sim state. The headless host feeds a fixed 1/60, which buys
      * exactly one step per frame -- the same contract a lockstep client keeps. */
     int steps = wb_det_fixed_advance(&h->acc, (double)dt);
+    int rc = 0;
     for (int i = 0; i < steps; i++) {
-        if (wb_script_step(h->L, (float)WB_HOST_FIXED_DT) < 0)
-            return -1;
-        wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
+        WB_PROF_ZONE(pr, "script") {
+            rc = wb_script_step(h->L, (float)WB_HOST_FIXED_DT);
+        }
+        if (rc < 0) break;
+        WB_PROF_ZONE(pr, "physics") {
+            wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
+        }
         h->ticks++;
         h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
     }
+    wb_prof_zone_end(pr, "frame");
     h->alpha = wb_interp_alpha(wb_det_fixed_remainder(&h->acc), WB_HOST_FIXED_DT);
-    return steps > 0 ? 1 : 0;
+    wb_prof_end_frame(pr);
+    return rc < 0 ? -1 : (steps > 0 ? 1 : 0);
 }
 
 uint32_t wb_host_ticks(const wb_host *h) {
@@ -219,6 +244,21 @@ uint64_t wb_host_digest(const wb_host *h) {
 
 float wb_host_render_alpha(const wb_host *h) {
     return h ? h->alpha : 0.0f;
+}
+
+wb_prof *wb_host_profiler(wb_host *h) {
+    return h ? h->prof : NULL;
+}
+
+int wb_host_prof_summary(wb_host *h, const char *name, wb_prof_stat *out) {
+    if (!h || !h->prof || !name || !out) return -1;
+    /* wb_prof_summary returns 1 when the slot exists, 0 when it does not; this
+     * accessor's contract is the opposite, so translate. */
+    return wb_prof_summary(h->prof, name, out) ? 0 : -1;
+}
+
+unsigned long wb_host_prof_overruns(const wb_host *h) {
+    return (h && h->prof) ? wb_prof_total_overruns(h->prof) : 0;
 }
 
 int wb_host_running(wb_host *h) {

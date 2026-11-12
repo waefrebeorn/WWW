@@ -21,9 +21,12 @@
 #define WB_HOST_H
 
 #include <stddef.h>
+#include <stdint.h>
 
+#include "wb_dist.h"
 #include "wb_ecs.h"
 #include "wb_mode.h"
+#include "wb_prof.h"
 #include "wb_worldspace.h"
 
 #ifdef __cplusplus
@@ -81,6 +84,18 @@ uint64_t wb_host_digest(const wb_host *h);
 /* Render-interpolation alpha in [0,1) from the accumulator's remainder. The sim
  * state is never interpolated -- only what a renderer would draw. */
 float wb_host_render_alpha(const wb_host *h);
+
+/* The frame profiler (LP-01), covering every host step. Valid for the host's
+ * lifetime; the caller must not dispose it. */
+wb_prof *wb_host_profiler(wb_host *h);
+
+/* Fold a profiler slot over the frames it has recorded: last, mean, min, max and
+ * the p50/p95/p99 hitch view. 0 on success, -1 if the slot is unknown. */
+int wb_host_prof_summary(wb_host *h, const char *name, wb_prof_stat *out);
+
+/* Budget overruns since the host opened (LP-05's gate: a slot given a per-frame
+ * allowance counts a frame it exceeded it). */
+unsigned long wb_host_prof_overruns(const wb_host *h);
 
 /* The mode's own wb.running flag: a script sets wb.running = false to stop the
  * host. Missing/falsey means keep running. */
