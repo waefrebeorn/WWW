@@ -371,10 +371,13 @@ Two more practices belong in the plan even though they are not CI gates:
 
 Each phase has an exit criterion that is a *running program*, not a document.
 
-### Phase 0 — Make the binary honest *(one commit, done)*
+### Phase 0 — Make the binary honest *(in progress)*
 - Disambiguate the two quadkey APIs so `make all` links — **done, `d5773c9`**.
+- Ship the vertical-slice gate — **done, `tools/slice.sh` and `make slice`**. It
+  builds, refuses a stale binary, plays both shipped gametypes and asserts the
+  output. Verified that it fails when a source is touched and passes after a
+  rebuild, so it is a real gate and not theatre.
 - Resolve `wb_exp`: delete it, or make it the live path. It is dead code today.
-- Turn `make run` into `make slice` with assertions.
 - **Exit:** `make all` links, `make slice` passes, and a stale-run check fails CI.
 
 ### Phase 1 — Composition: put the engine in the host
@@ -579,6 +582,7 @@ mingw32-make test            # 88 gate results / 8,457 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub
+mingw32-make slice           # asserts the above, and refuses a stale binary
 
 # module wiring / reachability
 python3 tools/wiring_report.py        # leaf vs wired vs unwired, and reachability
