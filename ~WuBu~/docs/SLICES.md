@@ -25,12 +25,13 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 
 ## Running totals
 
-`make test` currently: **92 gates, 8628 assertions, 0 fail.**
+`make test` currently: **95 gates, 8712 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
 PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
-SPACE 27 · HOST 49 · WALK 21 · OBJECTIVE 48 · HUD 43 · RENDER 20 · WINDOW 16 ·
+SPACE 27 · HOST 49 · WALK 21 · AUDIO 38 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
+HUD 43 · RENDER 20 · WINDOW 16 ·
 PROF 29 · DET 15 · SNAP 17 · MATH 22 · FASTMATH 7 · INTERP 14 · JOB 12 ·
 POOL 5074 · ACCESS 26 · ATOMIC 8 · FRAME 21 · HIVE 46 · TAGHEAP 21 · THREADHEAP 14 · BUDGET 23 ·
 GEOM 10 · MESHLET 12 · LOD 22 · HLOD 14 · GALLOC 27 · OCCL 21 · BINDLESS 23 ·

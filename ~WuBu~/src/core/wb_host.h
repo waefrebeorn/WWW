@@ -129,6 +129,15 @@ double   wb_host_elapsed(const wb_host *h);
 const char *wb_host_hint(const wb_host *h);
 int       wb_host_hint_visible(const wb_host *h);
 
+/* The match's audio: the accumulated mono mix, the number of frames in it, and
+ * how many sound events the run produced. The buffer is the host's; the caller
+ * writes it out (the engine writes a WAV) and must not free it. */
+const float *wb_host_audio(const wb_host *h, size_t *nframes);
+uint64_t     wb_host_audio_events(const wb_host *h);
+/* The rate the host mixes at. A caller writing the audio needs it for the
+ * file's header. */
+int          wb_host_audio_rate(const wb_host *h);
+
 /* The frame profiler (LP-01), covering every host step. Valid for the host's
  * lifetime; the caller must not dispose it. */
 wb_prof *wb_host_profiler(wb_host *h);

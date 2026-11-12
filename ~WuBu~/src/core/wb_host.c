@@ -14,6 +14,7 @@
 #include "wb_worldspace.h"
 #include "wb_util.h"
 #include "wb_walk.h"
+#include "wb_audio.h"
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -23,6 +24,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The audio rate of the shipped host. Chosen to divide evenly by the 60 Hz fixed
+ * step -- 400 samples per tick -- so audio is a whole number of samples per
+ * simulation step and the two clocks cannot drift apart. */
+#define WB_AUDIO_RATE 24000
 
 struct wb_host {
     wb_worldspace *ws;
@@ -45,6 +51,12 @@ struct wb_host {
     double         hint_seconds;             /* how long it stays up, 0 = never */
     wb_walk       *walks;       /* per-entity walk cycle, indexed by entity index */
     uint32_t       nwalks;      /* allocated entries in `walks` */
+    wb_audio       audio;       /* the sound of the match (LP-42 stone 2) */
+    int            last_step;   /* last half-cycle index of the player's stride */
+    uint32_t       last_score;  /* the score last sounded for */
+    float         *snd;         /* accumulated audio, mono, for the caller to write */
+    size_t         snd_n;       /* frames accumulated */
+    size_t         snd_cap;     /* allocated frames */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -192,6 +204,9 @@ wb_host *wb_host_open(const char *modes_root, const char *gamemode,
     wb_input_init(&h->in);
     wb_camera_init(&h->cam);
     wb_character_init(&h->ch);
+    /* 24000 Hz divides evenly by the 60 Hz fixed step (400 samples per tick), so
+     * the audio clock locks to the simulation clock instead of drifting. */
+    wb_audio_init(&h->audio, WB_AUDIO_RATE);
     h->keys.fwd = 'W'; h->keys.back = 'S';
     h->keys.left = 'A'; h->keys.right = 'D';
     h->keys.jump = ' '; h->keys.sprint = 0x10;   /* Shift */
@@ -301,6 +316,7 @@ void wb_host_close(wb_host *h) {
     if (h->world) wb_world_destroy(h->world);
     if (h->ws) wb_worldspace_close(h->ws);
     free(h->walks);
+    free(h->snd);
     free(h);
 }
 
@@ -391,6 +407,50 @@ static void wb_host_draw_figure(wb_framebuffer *fb, const wb_render_camera *rc,
     wb_render_marker(fb, rc, head, 0.14f, color);                 /* head     */
 }
 
+/* Turn simulation events into sound. Runs once per whole fixed step, so the
+ * audio clock IS the simulation clock -- a frame that buys no step makes no
+ * sound, and a match replays identically however the caller paces its frames. */
+static void wb_host_emit_sounds(wb_host *h) {
+    /* A footfall per half stride, and only when the body is actually moving:
+     * a stopped body holds its pose, so it should hold its silence too. */
+    if (h->walks && h->player.index < h->nwalks) {
+        const wb_walk *w = &h->walks[h->player.index];
+        int half = (int)floor(w->phase / 3.14159265358979);
+        if (half != h->last_step) {
+            h->last_step = half;
+            if (w->speed > 0.05) wb_audio_emit(&h->audio, WB_SND_FOOTSTEP);
+        }
+    }
+    /* A tone when the score changes, on any side. */
+    if (h->has_objective) {
+        uint32_t sides = wb_objective_sides(&h->objective);
+        uint32_t sc = 0;
+        for (uint32_t s = 0; s < sides; s++)
+            sc += wb_objective_score_of(&h->objective, s);
+        if (sc != h->last_score) {
+            h->last_score = sc;
+            if (sc > 0) wb_audio_emit(&h->audio, WB_SND_SCORE);
+        }
+    }
+}
+
+/* Mix `dt` seconds of audio and append it to the host's accumulated buffer.
+ * The buffer grows; a failed growth drops the audio rather than the host. */
+static void wb_host_mix_audio(wb_host *h, double dt) {
+    int n = (int)(h->audio.rate * dt);
+    if (n <= 0) return;
+    if (h->snd_n + (size_t)n > h->snd_cap) {
+        size_t cap = h->snd_cap ? h->snd_cap : 4096;
+        while (cap < h->snd_n + (size_t)n) cap *= 2;
+        float *grown = realloc(h->snd, cap * sizeof(float));
+        if (!grown) return;
+        h->snd = grown;
+        h->snd_cap = cap;
+    }
+    wb_audio_mix(&h->audio, h->snd + h->snd_n, n);
+    h->snd_n += (size_t)n;
+}
+
 int wb_host_step(wb_host *h, float dt) {
     if (!h || !h->L) return -1;
     /* One profiler frame per caller frame, whatever it buys. The frame zone is
@@ -425,6 +485,7 @@ int wb_host_step(wb_host *h, float dt) {
         /* The walk cycle is simulation state, so it advances with the fixed step
          * and never with the frame -- a render must not be able to move it. */
         wb_host_advance_walks(h, WB_HOST_FIXED_DT);
+        wb_host_emit_sounds(h);
         h->ticks++;
         h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
         /* The objective runs on the simulation clock, not the frame clock: it
@@ -436,6 +497,9 @@ int wb_host_step(wb_host *h, float dt) {
     wb_prof_zone_end(pr, "frame");
     h->alpha = wb_interp_alpha(wb_det_fixed_remainder(&h->acc), WB_HOST_FIXED_DT);
     wb_prof_end_frame(pr);
+    /* The audio follows the SIMULATED time, not the frame time: whatever whole
+     * steps this frame bought, that much sound exists. */
+    if (steps > 0) wb_host_mix_audio(h, (double)steps * WB_HOST_FIXED_DT);
     /* The camera follows the player; input edges are consumed once per frame. */
     double p[3];
     if (wb_host_player_pos(h, p) == 0) wb_camera_update(&h->cam, p, 0.5);
@@ -631,6 +695,22 @@ const char *wb_host_hint(const wb_host *h) {
 int wb_host_hint_visible(const wb_host *h) {
     if (!h || !h->hint[0] || h->hint_seconds <= 0.0) return 0;
     return wb_host_elapsed(h) < h->hint_seconds;
+}
+
+/* --------------------------------------------------------------- audio */
+
+const float *wb_host_audio(const wb_host *h, size_t *nframes) {
+    if (!h) { if (nframes) *nframes = 0; return NULL; }
+    if (nframes) *nframes = h->snd_n;
+    return h->snd;
+}
+
+uint64_t wb_host_audio_events(const wb_host *h) {
+    return h ? wb_audio_emitted(&h->audio) : 0;
+}
+
+int wb_host_audio_rate(const wb_host *h) {
+    return h ? h->audio.rate : 0;
 }
 
 /* ---- Input and the player controller ------------------------------------- */

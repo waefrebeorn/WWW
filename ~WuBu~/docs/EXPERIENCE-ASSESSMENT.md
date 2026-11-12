@@ -12,8 +12,8 @@ reproducible from the commands in §9.
 
 ## 1. TL;DR
 
-1. **The engine is a capability library, not a product.** 96 modules, 18k LOC of
-   core C11, 92 gates / 8,628 assertions, 0 fail — and **only 22 of 96 modules are
+1. **The engine is a capability library, not a product.** 99 modules, 19k LOC of
+   core C11, 95 gates / 8,712 assertions, 0 fail — and **only 25 of 99 modules are
    reachable from the shipped host**. The GPU backend, physics, assets,
    avatars, the quadkey spatial core and the tile store are all *not on the path*
    the shipped binary runs.
@@ -42,11 +42,11 @@ reproducible from the commands in §9.
 
 | What | Number |
 |---|---|
-| Core `.c` / `.h` | 101 / 96 |
-| Core LOC | 12,553 + 6,007 = **18,560** |
+| Core `.c` / `.h` | 104 / 99 |
+| Core LOC | 12,973 + 6,185 = **19,158** |
 | Other src (`lua`, `net`, `lv`, `platform`) | 1,190 + 1,028 + 6,807 + 292 LOC |
-| Gates | **92 results / 8,628 assertions / 0 fail** |
-| Test sources | 89 |
+| Gates | **95 results / 8,712 assertions / 0 fail** |
+| Test sources | 92 |
 | Pads | 114 → **9 shipped, 48 partial, 57 todo** |
 
 ### 2.2 The wiring, measured
@@ -62,10 +62,11 @@ Built the include graph over `src/` and classified every module header:
 Then the decisive one — breadth-first from the real entry points (`wb_host`,
 `wb_worldspace`, `wb_script`, `wb_lua_host`, `wb_space_bind`):
 
-> **22 of 96 modules are reachable from the shipped path.**
-> `wb_camera, wb_character, wb_det, wb_dist, wb_ecs, wb_host, wb_hud, wb_input,
-> wb_interp, wb_json, wb_lua_host, wb_mode, wb_objective, wb_prof, wb_render,
-> wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util, wb_walk, wb_worldspace`
+> **25 of 99 modules are reachable from the shipped path.**
+> `wb_audio, wb_camera, wb_character, wb_det, wb_dist, wb_dsp, wb_ecs, wb_host,
+> wb_hud, wb_input, wb_interp, wb_json, wb_lua_host, wb_mode, wb_objective,
+> wb_prof, wb_render, wb_script, wb_snap, wb_space_bind, wb_spawn, wb_util,
+> wb_walk, wb_wav, wb_worldspace`
 
 Everything else — `wb_gpu*`, `wb_physics*`, `wb_assets*`,
 `wb_avatar*`, `wb_spatial`, `wb_tiles`, `src/net/*`, `wb_edit`, `wb_heightfield`,
@@ -521,8 +522,36 @@ The walk cycle is simulation state: it advances once per whole fixed step and
 never per frame, so a render cannot move it. `test-host` asserts that two renders
 with no step between are byte-identical and that a step changes the frame.
 
-  What remains in this phase is **audio** (nothing sounds yet) and the rest of
-  **UI** (`LP-42`: a widget stack, layout, a focus chain, and real text shaping).
+**Audio is shipped.** The match makes a sound: a footfall per half stride while
+the player moves, a tone when the score changes. `wb_audio` is a synthesiser and
+a mixer — a sound is a glide from one frequency to another over a duration at a
+peak amplitude, a voice is a phase and a clock, and mixing is a sum with a
+saturating clip. Eight voices; a full mixer DROPS the event rather than
+truncating a sounding one, and counts the refusal.
+
+The audio clock is the simulation clock: the host mixes once per whole fixed
+step, so a frame that buys no step makes no sound and a match replays identically
+however the caller paces its frames. 24 kHz was chosen because it divides evenly
+by the 60 Hz step — 400 samples per tick — so the two clocks cannot drift.
+
+Two modules were **taken from the Big Mac repo** (waefrebeorn/big-mac, the WuBu
+musical agent) rather than reinvented: `wb_wav`, its hand-written 16-bit PCM WAV
+writer, and `wb_dsp`, its autocorrelation / Levinson-Durbin LPC / radix-2 FFT /
+YIN pitch layer. Same author, same no-third-party rule. The engine writes sound
+as a WAV for the same reason it writes frames as a PPM: a file the space owns
+rather than a device it drives.
+
+`wb_dsp` is on the shipped path, not just in gates: after writing, the engine
+measures its own output — the RMS of the whole mix and the dominant frequency of
+the loudest window — and the slice asserts that peak is low, because a footfall
+is a thud and a whine is a fault. YIN cannot do this check: it returns 0 on a
+170 ms window containing an 80 ms transient. The FFT does it, at 105 Hz against a
+synthesised 110 Hz.
+
+  What remains in this phase is the rest of **UI** (`LP-42`: a widget stack,
+  layout, a focus chain, and real text shaping). Audio has no device path, no
+  streaming, no attenuation and no sample formats — a caller with a device hands
+  it the same float buffer.
 
 **Onboarding is shipped.** A first-time player is now told what to do, and the
 mode decides what to teach rather than the engine hardcoding it: `duel-stadium`
@@ -725,7 +754,7 @@ find src/core -name 'wb_*.h' | wc -l
 wc -l src/core/*.c src/core/*.h | tail -1
 
 # gates
-mingw32-make test            # 92 gate results / 8,628 assertions / 0 fail
+mingw32-make test            # 95 gate results / 8,712 assertions / 0 fail
 
 # the shipped path
 mingw32-make all && ./build/wubu_engine.exe games omniverse-hub

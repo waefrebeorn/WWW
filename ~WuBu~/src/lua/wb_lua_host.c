@@ -16,8 +16,12 @@
  * Build: mingw32-make all
  */
 #include "wb_host.h"
+#include "wb_wav.h"
+#include "wb_dsp.h"
 #include "wb_script.h"
 #include "wb_win32.h"
+
+#include <math.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,9 +55,10 @@ int main(int argc, char **argv) {
         fprintf(stderr,
                 "usage: %s <modes-root> <gametype> [player-id] "
                 "[--input fwd|back|left|right|jump|sprint|none] "
-                "[--render out.ppm] [--window] [--frames N]\n"
+                "[--render out.ppm] [--sound out.wav] [--window] [--frames N]\n"
                 "  --window   open a window and drive it with the keyboard/mouse\n"
-                "  --frames N run at most N frames, then exit (with --window)\n",
+                "  --frames N run at most N frames, then exit (with --window)\n"
+                "  --sound F  write the match's audio to a 16-bit mono WAV\n",
                 argv[0]);
         return 2;
     }
@@ -65,6 +70,7 @@ int main(int argc, char **argv) {
     const char *player = "player-1";
     const char *input_name = "none";
     const char *render_path = NULL;
+    const char *sound_path  = NULL;
     int use_window = 0, max_frames = 0, player_set = 0;
 
     for (int i = 3; i < argc; i++) {
@@ -72,6 +78,8 @@ int main(int argc, char **argv) {
             input_name = argv[++i];
         } else if (strcmp(argv[i], "--render") == 0 && i + 1 < argc) {
             render_path = argv[++i];
+        } else if (strcmp(argv[i], "--sound") == 0 && i + 1 < argc) {
+            sound_path = argv[++i];
         } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             max_frames = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--window") == 0) {
@@ -161,6 +169,64 @@ int main(int argc, char **argv) {
             printf("wb: rendered %d marker(s) to %s\n", drawn, render_path);
         }
     }
+    /* The match's audio, written out as a file the space owns rather than played
+     * through a device: the same rule as the PPM frames. */
+    if (sound_path) {
+        size_t nframes = 0;
+        const float *snd = wb_host_audio(h, &nframes);
+        /* wb_wav_write is the Big Mac writer and takes doubles; the host mixes
+         * in floats, so the conversion happens here rather than in the writer. */
+        double *pcm = NULL;
+        if (nframes > 0) {
+            pcm = malloc(nframes * sizeof(double));
+            if (pcm) for (size_t i = 0; i < nframes; i++) pcm[i] = snd[i];
+        }
+        if (pcm && wb_wav_write(sound_path, pcm, nframes,
+                                wb_host_audio_rate(h)) == 0) {
+            /* The engine measures its own output rather than trusting the
+             * synthesiser: the level of the whole mix, and the dominant
+             * frequency of the loudest window. A footfall is a LOW thud, so the
+             * peak is checked, not just the loudness. */
+            double rms = 0.0;
+            for (size_t i = 0; i < nframes; i++) rms += pcm[i] * pcm[i];
+            rms = sqrt(rms / (double)(nframes ? nframes : 1));
+
+            double best = 0.0, peak_hz = 0.0;
+            size_t win = 4096;
+            if (nframes >= win) {
+                double *Re = malloc(win * sizeof(double));
+                double *Im = malloc(win * sizeof(double));
+                if (Re && Im) {
+                    for (size_t off = 0; off + win <= nframes; off += win) {
+                        double a = 0.0;
+                        for (size_t i = 0; i < win; i++) {
+                            double v = pcm[off + i];
+                            Re[i] = v; Im[i] = 0.0;
+                            a += v * v;
+                        }
+                        if (sqrt(a / (double)win) <= best) continue;
+                        best = sqrt(a / (double)win);
+                        if (wb_rfft(Re, win, Re, Im) == 0) {
+                            size_t bin = wb_argmax_abs(Re, 1, win / 2);
+                            peak_hz = (double)bin *
+                                      (double)wb_host_audio_rate(h) /
+                                      (double)win;
+                        }
+                    }
+                }
+                free(Re); free(Im);
+            }
+            printf("wb: wrote %zu samples to %s (%llu events, rms %.4f, "
+                   "peak %.0f Hz in the loudest window)\n",
+                   nframes, sound_path,
+                   (unsigned long long)wb_host_audio_events(h),
+                   rms, peak_hz);
+        } else if (!pcm) {
+            fprintf(stderr, "wb: cannot write '%s'\n", sound_path);
+        }
+        free(pcm);
+    }
+
     wb_host_close(h);
     if (win) wb_win32_close(win);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",

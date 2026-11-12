@@ -245,7 +245,52 @@ else
   bad "anim: the figure barely changes under motion (driven $anim_fwd, undriven $anim_none)"
 fi
 
-# ---- 7. verdict -----------------------------------------------------------
+# ---- 7. audio -------------------------------------------------------------
+# The match makes a sound: a footfall per half stride while the player moves, a
+# tone when the score changes. The engine writes it as a WAV -- the same rule as
+# the PPM frames, a file the space owns rather than a device it drives.
+note "audio"
+snd_wav="build/match.wav"
+rm -f "$snd_wav"
+snd_out="$(./build/wubu_engine.exe games duel-stadium --frames 600 --input fwd \
+                                    --sound "$snd_wav" 2>&1)"
+echo "$snd_out" | grep -q "wrote" || bad "audio: nothing was written"
+[ -s "$snd_wav" ] || bad "audio: no file"
+# 600 frames at the 60 Hz fixed step is 10 s; at 24 kHz that is 240000 frames,
+# and a WAV carries a 44-byte header, so the file must be exactly 480044 bytes.
+# The size is the clock check: it proves the audio ran on SIMULATION time.
+snd_size=$(wc -c < "$snd_wav")
+if [ "$snd_size" -ne 480044 ]; then
+  bad "audio: wrong size ($snd_size bytes, expected 480044)"
+else
+  ok "audio: the mix is 10 s at 24 kHz ($snd_size bytes)"
+fi
+# Silence is all zero bytes; anything else is a sound. `tr -d '0'` strips the
+# zero nibbles, so a silent mix leaves nothing. The WHOLE file is scanned: the
+# first footstep is a sixth of a second in, so a prefix would miss it.
+snd_hex="$(tail -c +45 "$snd_wav" | od -An -tx1 -v | tr -d ' \n')"
+snd_nonzero=$(printf '%s' "$snd_hex" | tr -d '0' | wc -c)
+if [ "$snd_nonzero" -lt 100 ]; then
+  bad "audio: the mix is silent"
+else
+  ok "audio: the mix is audible ($snd_nonzero non-zero nibbles)"
+fi
+# The run must have produced events, not just a buffer.
+echo "$snd_out" | grep -qE "\([1-9][0-9]* events," \
+  || bad "audio: no sound events were emitted"
+# And the engine must have measured its own output: the dominant frequency of the
+# loudest window. A footfall is a low thud, so the peak must sit low -- this is
+# the check that tells a footstep from a fault.
+snd_peak="$(echo "$snd_out" | sed -n 's/.*peak \([0-9]\+\) Hz.*/\1/p' | head -1)"
+if [ -z "$snd_peak" ]; then
+  bad "audio: the engine did not report the mix's peak frequency"
+elif [ "$snd_peak" -gt 200 ]; then
+  bad "audio: the mix's peak is ${snd_peak} Hz -- a whine, not a footfall"
+else
+  ok "audio: the mix's peak is ${snd_peak} Hz (a low thud)"
+fi
+
+# ---- 8. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'
   exit 1
