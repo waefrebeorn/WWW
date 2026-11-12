@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 96 gates, 8755 assertions
+mingw32-make test       # 96 gates, 8762 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -119,7 +119,11 @@ skips its own `mkdir` rule.
 | `src/core/wb_mode.*` | gametype manifests + typed config schema + declared spawns (slice 19) |
 | `src/core/wb_spawn.*` | spawn points: team / gametype tagged, reservable |
 | `src/core/wb_worldspace.*` | the spawn-a-worldspace facade (slice 19) + stadium gates (slice 20) |
-| `src/core/wb_host.*` | the gametype host: scan a directory of modes, run one (slice 22) |
+| `src/core/wb_host.*` | the gametype host: scan a directory of modes, run one (slice 22); steps at a fixed rate and draws between steps (slice 24) |
+| `src/core/wb_audio.*` | the synthesiser and mixer: one-shot sounds, stereo positional mix (slice 23) |
+| `src/core/wb_atmos.*` | the HRTF binaural panner: ITD, head shadow, pinna notch, distance |
+| `src/core/wb_osc.*`, `wb_env.*`, `wb_biquad.*`, `wb_reverb.*` | Big Mac's DSP units: oscillator, ADSR, biquad, Schroeder FDN |
+| `src/core/wb_wav.*` | 16-bit PCM WAV writer, mono and stereo |
 | `src/lua/wb_space_bind.*` | the gamemode-facing space: `wb.add_spawn` / `add_gate` / `gate_at` / `travel` / `instances` (slices 21–22) |
 | `src/core/wb_util.*` | shared helpers: file IO, FNV-1a hash, error buffer, paths |
 | `src/core/wb_gltf.*` | shared glTF accessor decoding + GLB splitting |

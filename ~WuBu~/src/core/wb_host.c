@@ -61,6 +61,20 @@ struct wb_host {
     float         *snd_r;       /* accumulated right channel (aliases snd_l + cap) */
     size_t         snd_n;       /* frames accumulated */
     size_t         snd_cap;     /* allocated frames per channel */
+    /* The PREVIOUS step's positions, for render interpolation (LP-04): where each
+     * body was before the last fixed step. The renderer lerps from these to the
+     * current ones by the accumulator's remainder, so a 60 Hz sim on a faster
+     * display glides instead of juddering. `prev_ok` marks a body with no state
+     * last step (spawned, or dead): it is drawn where it is rather than
+     * interpolated out of a stale slot.
+     *
+     * The walk PHASE is deliberately not interpolated. It is stride state, not a
+     * transform, and the stride is a sine: lerping it shifts which part of the
+     * cycle two frames land on, which makes the legs read as juddering even when
+     * they are not. A body glides; its stride keeps its own clock. */
+    float  *prev_pos;            /* 3 per entity, world z-up */
+    uint8_t *prev_ok;            /* 1 per entity */
+    uint32_t prev_n;             /* allocated entries */
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -321,6 +335,8 @@ void wb_host_close(wb_host *h) {
     if (h->ws) wb_worldspace_close(h->ws);
     free(h->walks);
     free(h->last_step);
+    free(h->prev_pos);
+    free(h->prev_ok);
     free(h->snd_l);                 /* snd_r is a half of the same allocation */
     wb_audio_free(&h->audio);
     free(h);
@@ -345,6 +361,43 @@ static void wb_host_grow_walks(wb_host *h, uint32_t need) {
     h->walks = grown;
     h->last_step = steps;
     h->nwalks = cap;
+}
+
+/* Grow the previous-step tables. Three arrays rather than one packed block: a
+ * partial growth leaves the arrays different lengths, and every accessor checks
+ * `index < prev_n` before touching them, so the short ones are simply unreachable
+ * rather than overwritten. */
+static int wb_host_grow_prev(wb_host *h, uint32_t n) {
+    if (n <= h->prev_n) return 0;
+    float *pp = realloc(h->prev_pos, (size_t)n * 3 * sizeof(float));
+    if (!pp) return -1;
+    h->prev_pos = pp;
+    uint8_t *ok = realloc(h->prev_ok, (size_t)n);
+    if (!ok) return -1;
+    h->prev_ok = ok;
+    h->prev_n = n;
+    return 0;
+}
+
+/* Remember where every body IS, before the step moves it. Called once per whole
+ * fixed step, before the physics tick: the state captured here is the "previous"
+ * end of the lerp, and the state after the tick is the "current" end. */
+static void wb_host_snapshot_prev(wb_host *h) {
+    uint32_t n = wb_world_next_index(h->world);
+    if (n == 0) return;
+    if (wb_host_grow_prev(h, n) != 0) return;   /* no interpolation this step */
+    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
+    uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
+    for (uint32_t i = 0; i < n; i++) {
+        h->prev_ok[i] = 0;
+        if (base && wb_world_slot_alive(h->world, i) &&
+            wb_world_comp_present(h->world, WB_COMP_POSITION, i)) {
+            float *p = (float *)(base + (size_t)i * esz);
+            float *dst = &h->prev_pos[(size_t)i * 3];
+            dst[0] = p[0]; dst[1] = p[1]; dst[2] = p[2];
+            h->prev_ok[i] = 1;
+        }
+    }
 }
 
 /* Advance every body's walk cycle by its OWN velocity, so a figure walks at the
@@ -548,6 +601,11 @@ int wb_host_step(wb_host *h, float dt) {
                 wb_character_apply_body(&h->ch, &h->body, &a, &h->cam,
                                         (float)WB_HOST_FIXED_DT);
         }
+        /* Remember where every body is BEFORE the step moves it: the renderer
+         * lerps from this to the post-step state by the accumulator's remainder
+         * (LP-04). Snapshotting here rather than after the tick is what makes the
+         * two ends of the lerp exactly one step apart. */
+        wb_host_snapshot_prev(h);
         WB_PROF_ZONE(pr, "physics") {
             wb_physics_tick(h->world, (float)WB_HOST_FIXED_DT);
         }
@@ -569,9 +627,17 @@ int wb_host_step(wb_host *h, float dt) {
     /* The audio follows the SIMULATED time, not the frame time: whatever whole
      * steps this frame bought, that much sound exists. */
     if (steps > 0) wb_host_mix_audio(h, (double)steps * WB_HOST_FIXED_DT);
-    /* The camera follows the player; input edges are consumed once per frame. */
+    /* The camera follows the INTERPOLATED player position, not the stepped one:
+     * a camera that steps while the bodies glide makes the glide invisible. Input
+     * edges are consumed once per frame. */
     double p[3];
-    if (wb_host_player_pos(h, p) == 0) wb_camera_update(&h->cam, p, 0.5);
+    if (wb_host_player_pos(h, p) == 0) {
+        double rp[3];
+        if (wb_host_body_render_pos(h, h->player.index, rp) == 0)
+            wb_camera_update(&h->cam, rp, 0.5);
+        else
+            wb_camera_update(&h->cam, p, 0.5);
+    }
     /* The camera is the LISTENER: where the player is looking is where every
      * sound is placed from. Set every frame, because the head turns. */
     wb_audio_set_listener(&h->audio,
@@ -845,6 +911,30 @@ int wb_host_player_pos(const wb_host *h, double p[3]) {
     return 0;
 }
 
+/* Where a body is DRAWN, as opposed to where it is SIMULATED: the previous
+ * step's position lerped toward the current one by the fixed accumulator's
+ * remainder (LP-04). `out` is the world position, z-up. Returns 0 on success --
+ * including for a body with no previous state, which is reported at its
+ * simulated position -- and -1 when the body has no position at all. */
+int wb_host_body_render_pos(const wb_host *h, uint32_t index, double out[3]) {
+    if (!h || !h->world || !out) return -1;
+    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
+    uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
+    if (!base || !wb_world_slot_alive(h->world, index) ||
+        !wb_world_comp_present(h->world, WB_COMP_POSITION, index))
+        return -1;
+    const float *cur = (const float *)(base + (size_t)index * esz);
+    if (index < h->prev_n && h->prev_ok && h->prev_ok[index] && h->prev_pos) {
+        const float *prev = &h->prev_pos[(size_t)index * 3];
+        float w[3];
+        wb_interp_lerp3(prev, cur, h->alpha, w);
+        out[0] = w[0]; out[1] = w[1]; out[2] = w[2];
+        return 0;
+    }
+    out[0] = cur[0]; out[1] = cur[1]; out[2] = cur[2];
+    return 0;
+}
+
 int wb_host_render(wb_host *h, wb_framebuffer *fb) {
     if (!h || !fb || !fb->pixels || fb->width <= 0 || fb->height <= 0) return -1;
 
@@ -879,14 +969,15 @@ int wb_host_render(wb_host *h, wb_framebuffer *fb) {
                                 (float)right_w[1] };
     const float forward_f[3] = { (float)forward_w[0], (float)forward_w[2],
                                  (float)forward_w[1] };
-    size_t esz = wb_world_comp_elem_size(h->world, WB_COMP_POSITION);
-    uint8_t *base = (uint8_t *)wb_world_comp_data(h->world, WB_COMP_POSITION);
     uint32_t n = wb_world_next_index(h->world);
     for (uint32_t i = 0; i < n; i++) {
         if (!wb_world_slot_alive(h->world, i)) continue;
         if (!wb_world_comp_present(h->world, WB_COMP_POSITION, i)) continue;
-        float *p = (float *)(base + (size_t)i * esz);
-        const float w[3] = { p[0], p[2], p[1] };       /* z-up -> y-up */
+        /* Where the body is DRAWN, not where it is simulated: the previous step
+         * lerped toward this one by the accumulator's remainder (LP-04). */
+        double rp[3];
+        if (wb_host_body_render_pos(h, i, rp) != 0) continue;
+        const float w[3] = { (float)rp[0], (float)rp[2], (float)rp[1] };
         int is_player = (i == h->player.index);
         uint32_t col = is_player ? 0xFFE080 : 0xC0C8D0;
         /* A body with no walk state (the table could not grow) falls back to the

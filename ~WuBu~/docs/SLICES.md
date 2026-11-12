@@ -1,4 +1,4 @@
-# Slices 9–23 — kernel → meta engine → the gametype host → audio
+# Slices 9–24 — kernel → meta engine → the gametype host → audio → interpolation
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -23,15 +23,16 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 21 | gamemode-facing space | the stadium layer exposed to scripts: `wb.add_gate` / `gate_at` / `travel` / `instances` from inside the sandbox, attributed to the mode's own world | `make test-space` — 25 | ✅ |
 | 22 | gametype host | the engine binary runs a gametype package: scan a directory of modes, register each with its declared spawns, run the mode's script, materialize the player, step the world | `make test-host` — 20 | ✅ |
 | 23 | audio | a synthesiser and a mixer: Big Mac's oscillator, ADSR, biquad and FDN reverb, an HRTF binaural panner, a stereo positional mix, and every walking body's footfall placed in the world | `make test-audio` — 47 · `make test-synth` — 34 · `make test-wav` — 22 | ✅ |
+| 24 | render interpolation | the frame is drawn BETWEEN sim steps: the previous step's positions lerped by the fixed accumulator's remainder, and the camera follows the same interpolated point | `make test-host` — 56 | ✅ |
 
 ## Running totals
 
-`make test` currently: **96 gates, 8755 assertions, 0 fail.**
+`make test` currently: **96 gates, 8762 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
 PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
-SPACE 27 · HOST 49 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
+SPACE 27 · HOST 56 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·
 PROF 29 · DET 15 · SNAP 17 · MATH 22 · FASTMATH 7 · INTERP 14 · JOB 12 ·
 POOL 5074 · ACCESS 26 · ATOMIC 8 · FRAME 21 · HIVE 46 · TAGHEAP 21 · THREADHEAP 14 · BUDGET 23 ·

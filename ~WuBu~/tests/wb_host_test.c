@@ -90,11 +90,31 @@ static const char *kStadiumLua =
     "  wb.running = false\n"
     "end\n";
 
+/* A mode whose player walks at a constant speed: the simplest thing that makes
+ * a body actually move, which is what render interpolation has to be tested
+ * against -- a stationary body interpolates to itself. */
+static const char *kDriftJson =
+    "{\n"
+    "  \"name\": \"drift-stadium\",\n"
+    "  \"version\": \"1.0.0\",\n"
+    "  \"entry\": \"main.lua\",\n"
+    "  \"max_players\": 4,\n"
+    "  \"teams\": 1,\n"
+    "  \"spawns\": [ { \"pos\": [0, 0, 0], \"team\": -1, \"tag\": \"landing\" } ]\n"
+    "}\n";
+
+static const char *kDriftLua =
+    "function step(dt)\n"
+    "  wb.set_vel(wb.player, { 2, 0, 0 })\n"
+    "end\n";
+
 int main(void) {
     write_file("build/host/omniverse-hub/mode.json", kHubJson);
     write_file("build/host/omniverse-hub/main.lua", kHubLua);
     write_file("build/host/duel-stadium/mode.json", kStadiumJson);
     write_file("build/host/duel-stadium/main.lua", kStadiumLua);
+    write_file("build/host/drift-stadium/mode.json", kDriftJson);
+    write_file("build/host/drift-stadium/main.lua", kDriftLua);
 
     char err[1024];
 
@@ -113,7 +133,7 @@ int main(void) {
     CHECK(wb_host_instance(h)[0] != 0, "the player is in a live instance");
 
     /* both gametypes under the root were registered */
-    CHECK(wb_worldspace_mode_count(wb_host_space(h)) == 2,
+    CHECK(wb_worldspace_mode_count(wb_host_space(h)) == 3,
           "every mode.json under the root was registered");
 
     /* the DECLARED spawn points were installed before any script ran */
@@ -277,6 +297,73 @@ int main(void) {
         /* A mode with no objective still has a clock to put things on. */
         CHECK(wb_host_elapsed(h) == 0.0, "the hub starts at zero");
         wb_host_close(h);
+    }
+
+    /* ---- render interpolation (LP-04) -------------------------------------
+     * The frame is drawn BETWEEN simulation steps. A frame time of one and a
+     * half steps buys one whole step and leaves a half-step remainder, so the
+     * body must be drawn halfway between where it was and where it is. Without
+     * this the figure steps at the sim rate and a faster display judders. */
+    h = wb_host_open("build/host", "drift-stadium", "P1", -1, err, sizeof err);
+    CHECK(h != NULL, "the drift mode opens");
+    if (h) {
+        /* Two whole steps to establish a previous state. A whole step leaves a
+         * rounding residue rather than exactly zero, so the drawn position here
+         * is the previous step's -- which is exactly the endpoint the
+         * interpolation starts from. */
+        wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        double prev[3], mid[3], sim[3];
+        wb_host_body_render_pos(h, wb_host_player(h).index, prev);
+
+        wb_host_step(h, (float)(1.5 * WB_HOST_FIXED_DT));
+        CHECK(wb_host_render_alpha(h) > 0.4f &&
+              wb_host_render_alpha(h) < 0.6f,
+              "a one-and-a-half-step frame leaves a half-step alpha");
+        wb_host_body_render_pos(h, wb_host_player(h).index, mid);
+        wb_host_player_pos(h, sim);
+
+        double moved = 0.0;
+        for (int k = 0; k < 3; k++)
+            moved += (sim[k] - prev[k]) * (sim[k] - prev[k]);
+        CHECK(moved > 0.0, "the player moved between the two states");
+
+        /* The drawn position lies ON the segment between the two states: not
+         * past either end, and not off the line. */
+        double worst = 0.0;
+        for (int k = 0; k < 3; k++) {
+            double lo = prev[k], hi = sim[k];
+            if (lo > hi) { double t = lo; lo = hi; hi = t; }
+            double v = mid[k];
+            if (v < lo - 1e-4) v = lo - v;
+            else if (v > hi + 1e-4) v = v - hi;
+            else v = 0.0;
+            if (v > worst) worst = v;
+        }
+        CHECK(worst < 1e-4,
+              "the drawn position lies between the two simulation states");
+
+        /* And it is not merely the simulated position: interpolation moved it
+         * off the endpoint. */
+        double lag = 0.0;
+        for (int k = 0; k < 3; k++)
+            lag += (mid[k] - sim[k]) * (mid[k] - sim[k]);
+        CHECK(lag > 1e-6,
+              "the drawn position is not the simulated position");
+
+        /* A body with no previous state -- the very first step -- is drawn
+         * where it is rather than interpolated out of a stale slot. */
+        wb_host_close(h);
+        h = wb_host_open("build/host", "drift-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the drift mode reopens");
+        if (h) {
+            double fresh[3], at[3];
+            wb_host_body_render_pos(h, wb_host_player(h).index, fresh);
+            wb_host_player_pos(h, at);
+            CHECK(fresh[0] == at[0] && fresh[1] == at[1] && fresh[2] == at[2],
+                  "a body with no previous state is drawn where it is");
+            wb_host_close(h);
+        }
     }
 
     printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);

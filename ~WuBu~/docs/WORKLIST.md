@@ -51,7 +51,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
 | LP-03 | Determinism suite (PRNG, checksum, fixed-point, trig, per-tick digest, rollback) | L | LP-01 | [54][541][542] | **SHIPPED** (splitmix64 + Q31.32/CORDIC + per-tick digest; toolchain flags = LP-91) |
-| LP-04 | Fixed-timestep sim + render interpolation | M | LP-03 | [540] | **SHIPPED** (fixed-step + render alpha; per-entity sampling is renderer-side) |
+| LP-04 | Fixed-timestep sim + render interpolation | M | LP-03 | [540] | **SHIPPED** (fixed-step + render alpha + per-entity render interpolation: the previous step's positions lerped by the accumulator's remainder, camera included) |
 | LP-06 | Job system (fibers/work-stealing, counters) | L | LP-01, LP-07 | [5][552] | **SHIPPED** (job graph + worker pool w/ deterministic parallel-for) |
 | LP-07 | Data-access validation (safe-point resource tracking) | M | LP-06 | [6][18] | **PARTIAL** (acquire/release tracker + safe-point check shipped) |
 | LP-08 | SIMD, cache-conscious layout, memory ordering | M | LP-06 | [554][548] | **PARTIAL** (folded-poly SIMD + explicit release/acquire atomics shipped) |

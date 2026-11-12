@@ -94,6 +94,13 @@ uint64_t wb_host_digest(const wb_host *h);
  * state is never interpolated -- only what a renderer would draw. */
 float wb_host_render_alpha(const wb_host *h);
 
+/* Where a body is DRAWN, as opposed to where it is SIMULATED: the previous
+ * step's position lerped toward the current one by the fixed accumulator's
+ * remainder (LP-04). `out` is the world position, z-up. Returns 0 on success --
+ * including for a body with no previous state, which is reported at its
+ * simulated position -- and -1 when the body has no position at all. */
+int wb_host_body_render_pos(const wb_host *h, uint32_t index, double out[3]);
+
 /* ------------------------------------------------------------ objective */
 
 /* Install the match objective the mode declared. `rule` is one of
