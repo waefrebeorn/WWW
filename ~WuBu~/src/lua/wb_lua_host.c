@@ -55,10 +55,13 @@ int main(int argc, char **argv) {
         fprintf(stderr,
                 "usage: %s <modes-root> <gametype> [player-id] "
                 "[--input fwd|back|left|right|jump|sprint|none] "
-                "[--render out.ppm] [--sound out.wav] [--window] [--frames N]\n"
+                "[--render out.ppm] [--sound out.wav] [--window] [--frames N] "
+                "[--record log.wbr] [--replay log.wbr]\n"
                 "  --window   open a window and drive it with the keyboard/mouse\n"
                 "  --frames N run at most N frames, then exit (with --window)\n"
-                "  --sound F  write the match's audio to a 16-bit mono WAV\n",
+                "  --sound F  write the match's audio to a 16-bit stereo WAV\n"
+                "  --record F record every step's actions and digest to a replay log\n"
+                "  --replay F re-run a recorded log and report the first divergent tick\n",
                 argv[0]);
         return 2;
     }
@@ -71,6 +74,8 @@ int main(int argc, char **argv) {
     const char *input_name = "none";
     const char *render_path = NULL;
     const char *sound_path  = NULL;
+    const char *record_path = NULL;
+    const char *replay_path  = NULL;
     int use_window = 0, max_frames = 0, player_set = 0;
 
     for (int i = 3; i < argc; i++) {
@@ -80,6 +85,10 @@ int main(int argc, char **argv) {
             render_path = argv[++i];
         } else if (strcmp(argv[i], "--sound") == 0 && i + 1 < argc) {
             sound_path = argv[++i];
+        } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
+            record_path = argv[++i];
+        } else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc) {
+            replay_path = argv[++i];
         } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             max_frames = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--window") == 0) {
@@ -91,8 +100,40 @@ int main(int argc, char **argv) {
     }
 
     char why[1024];
+    if (record_path && replay_path) {
+        err("--record and --replay are mutually exclusive");
+        return 2;
+    }
+    wb_replay log;
+    memset(&log, 0, sizeof log);
+    if (replay_path) {
+        if (wb_replay_load(&log, replay_path) != 0) {
+            err("cannot load the replay log");
+            return 1;
+        }
+    } else if (record_path) {
+        if (wb_replay_init(&log, 4096) != 0) {
+            err("cannot start a replay log");
+            return 1;
+        }
+    }
+
     wb_host *h = wb_host_open(root, mode, player, -1, why, sizeof why);
-    if (!h) { err(why); return 1; }
+    if (!h) { err(why); wb_replay_free(&log); return 1; }
+
+    if (replay_path) {
+        if (wb_host_replay_start(h, &log) != 0) {
+            err("cannot start the replay");
+            wb_host_close(h); wb_replay_free(&log);
+            return 1;
+        }
+    } else if (record_path) {
+        if (wb_host_record_start(h, &log) != 0) {
+            err("cannot start recording");
+            wb_host_close(h); wb_replay_free(&log);
+            return 1;
+        }
+    }
 
     /* Translate the named action into the host's key map and hold it. */
     int input_code = -1;
@@ -236,16 +277,45 @@ int main(int argc, char **argv) {
         free(pcm_l); free(pcm_r);
     }
 
+    /* The replay verdict. The host is still alive here: the divergence is its
+     * answer, and it has to be read before the close. */
+    if (record_path) {
+        if (wb_replay_save(&log, record_path) == 0)
+            printf("wb: recorded %u steps to %s (crc %08x)\n",
+                   log.n, record_path, wb_replay_crc(&log));
+        else
+            fprintf(stderr, "wb: cannot write '%s'\n", record_path);
+    }
+    if (replay_path) {
+        if (wb_host_replay_diverged(h))
+            printf("wb: REPLAY DIVERGED at tick %u\n",
+                   wb_host_replay_divergence_tick(h));
+        else
+            printf("wb: replay reproduced the run (%u steps, crc %08x)\n",
+                   log.n, wb_replay_crc(&log));
+    }
+    wb_replay_free(&log);
+
+    /* The objective is read BEFORE the close: afterwards the host is gone. */
+    int have_obj = (wb_host_objective(h) != NULL);
+    char obj_name[64] = "none";
+    unsigned obj_score[2] = { 0, 0 };
+    double obj_clock = 0.0;
+    if (have_obj) {
+        snprintf(obj_name, sizeof obj_name, "%s",
+                 wb_host_objective_state_name(h));
+        obj_score[0] = wb_host_objective_score_of(h, 0);
+        obj_score[1] = wb_host_objective_score_of(h, 1);
+        obj_clock = wb_host_objective_clock(h);
+    }
+
     wb_host_close(h);
     if (win) wb_win32_close(win);
     printf("wb: engine exited clean after %u ticks (digest %016llx)\n",
            ticks, digest);
-    if (wb_host_objective(h))
+    if (have_obj)
         printf("wb: objective %s, score %u-%u, %.1fs left\n",
-               wb_host_objective_state_name(h),
-               wb_host_objective_score_of(h, 0),
-               wb_host_objective_score_of(h, 1),
-               wb_host_objective_clock(h));
+               obj_name, obj_score[0], obj_score[1], obj_clock);
     if (have_pos)
         printf("wb: %s at (%.2f, %.2f, %.2f)\n", player, p[0], p[1], p[2]);
     if (have_frame)

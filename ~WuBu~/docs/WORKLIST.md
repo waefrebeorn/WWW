@@ -61,7 +61,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
-| LP-87 | Desync prevention & triage tooling | L | LP-03 | [562][566][54] | **PARTIAL** (first-diff triage shipped; record/replay verifier not) |
+| LP-87 | Desync prevention & triage tooling | L | LP-03 | [562][566][54] | **PARTIAL** (first-diff triage + record/replay verifier shipped: a run's per-step actions and digests are logged, re-run from the log alone, and the first divergent tick is reported; headless bot fuzzing and a lockstep frame-stepper remain) |
 | LP-88 | Causal profiling (Coz) | M | LP-01 | [545][571] | TODO |
 | LP-89 | End-to-end latency measurement (input-to-photon) | M | LP-01, LP-32 | [557][556] | TODO |
 | LP-90 | Statistical benchmarking methodology | M | LP-05 | [559][564][565] | TODO |

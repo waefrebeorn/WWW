@@ -31,6 +31,7 @@
 #include "wb_objective.h"
 #include "wb_prof.h"
 #include "wb_render.h"
+#include "wb_replay.h"
 #include "wb_worldspace.h"
 
 #ifdef __cplusplus
@@ -100,6 +101,37 @@ float wb_host_render_alpha(const wb_host *h);
  * including for a body with no previous state, which is reported at its
  * simulated position -- and -1 when the body has no position at all. */
 int wb_host_body_render_pos(const wb_host *h, uint32_t index, double out[3]);
+
+/* ------------------------------------------------ replay (LP-87) ---------- */
+
+/* One recorded step: the actions the controller applied and the digest the step
+ * produced. 32 bytes, inside the replay frame's 64-byte payload. A log of these
+ * is the input stream a replay re-runs, so a run can be REPRODUCED and compared
+ * rather than merely observed. Named `wb_replay_step` because `wb_host_step` is
+ * already the function that advances the host. */
+typedef struct {
+    int      fwd, back, left, right, jump, sprint;
+    uint64_t digest;
+} wb_replay_step;
+
+/* Record every fixed step's actions and digest into `r`. The log is borrowed, not
+ * copied, and must outlive the host. Recording is per FIXED STEP, not per frame:
+ * a frame that buys two steps applies the input twice, and the log has to say so
+ * or the replay would not be the same run. */
+int  wb_host_record_start(wb_host *h, wb_replay *r);
+
+/* Re-run a recorded log: the host applies the recorded actions instead of the
+ * live input, and compares each step's digest with the recorded one. The log is
+ * borrowed. A replay covers the action stream -- the key edges and held keys the
+ * controller reads. A script cannot read the input directly (there is no binding
+ * for it), so the actions ARE the whole input to the simulation. */
+int  wb_host_replay_start(wb_host *h, const wb_replay *r);
+
+/* After a replay: whether it diverged, and the tick where it first did (0 when
+ * it did not). A divergence means the same inputs produced a different state --
+ * a desync, whatever its cause. */
+int      wb_host_replay_diverged(const wb_host *h);
+uint32_t wb_host_replay_divergence_tick(const wb_host *h);
 
 /* ------------------------------------------------------------ objective */
 

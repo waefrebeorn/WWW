@@ -49,4 +49,12 @@ uint32_t wb_replay_crc32(const void *data, uint32_t len);
 /* The CRC of a single frame's contents. */
 uint32_t wb_replay_frame_crc(uint32_t tick, const void *data, uint32_t len);
 
+/* File IO. The log is an 8-byte magic, a frame count, then the frames themselves
+ * (tick, length, CRC, payload). `wb_replay_load` re-verifies the chain, so a
+ * corrupted or truncated file is REFUSED rather than replayed -- a replay that
+ * silently starts from a damaged log is worse than no replay. A failed load
+ * leaves `r` empty. */
+int wb_replay_save(const wb_replay *r, const char *path);
+int wb_replay_load(wb_replay *r, const char *path);
+
 #endif /* WB_REPLAY_H */

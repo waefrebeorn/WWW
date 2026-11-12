@@ -102,6 +102,35 @@ int main(void) {
     CHECK(wb_replay_verify(NULL) == 0, "a NULL log does not verify");
     CHECK(wb_replay_crc(NULL) == 0, "a NULL log has no total");
 
+    /* ---- file IO ---- */
+    /* The round trip is what makes a log portable: record on one build, replay on
+     * another. */
+    CHECK(wb_replay_save(&r, "build/replay_test.wbr") == 0, "the log is written");
+    wb_replay loaded;
+    memset(&loaded, 0, sizeof loaded);
+    CHECK(wb_replay_load(&loaded, "build/replay_test.wbr") == 0,
+          "the log is read back");
+    CHECK(loaded.n == r.n, "the frame count survives the round trip");
+    CHECK(wb_replay_verify(&loaded) == 1, "the round trip still verifies");
+    CHECK(wb_replay_crc(&loaded) == wb_replay_crc(&r),
+          "the running total survives the round trip");
+    wb_replay_free(&loaded);
+
+    /* A log that is damaged or absent is REFUSED, not replayed: a replay that
+     * silently starts from a bad log is worse than no replay. */
+    CHECK(wb_replay_load(&loaded, "build/no-such-replay.wbr") == -1,
+          "a missing log is refused");
+    FILE *g = fopen("build/replay_garbage.wbr", "wb");
+    if (g) { fwrite("NOTAREPLAY!", 1, 11, g); fclose(g); }
+    CHECK(wb_replay_load(&loaded, "build/replay_garbage.wbr") == -1,
+          "a file that is not a replay log is refused");
+    CHECK(loaded.n == 0, "a refused load leaves the log empty");
+    CHECK(wb_replay_load(NULL, "build/replay_test.wbr") == -1,
+          "a NULL log is refused");
+    CHECK(wb_replay_load(&loaded, NULL) == -1, "a NULL path is refused");
+    CHECK(wb_replay_save(NULL, "build/x.wbr") == -1, "a NULL log saves nothing");
+    CHECK(wb_replay_save(&r, NULL) == -1, "a NULL path saves nothing");
+
     wb_replay_free(&r);
     wb_replay_free(&small);
     wb_replay_free(&a);

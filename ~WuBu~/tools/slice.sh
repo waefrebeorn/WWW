@@ -291,6 +291,30 @@ else
   ok "audio: the mix's peak is ${snd_peak} Hz (a low thud)"
 fi
 
+# ---- 7. replay -------------------------------------------------------------
+# LP-87: a run can be REPRODUCED from its log. Record one, then re-run it from
+# the log alone -- with the live input deliberately different. The digest must
+# match: the same inputs producing the same state is the determinism promise,
+# made portable across a build or a machine.
+note "replay"
+rep_log="build/replay.wbr"
+rm -f "$rep_log"
+./build/wubu_engine.exe games duel-stadium --frames 300 --input fwd \
+    --record "$rep_log" >/dev/null 2>&1
+[ -s "$rep_log" ] || bad "replay: nothing was recorded"
+rep_out="$(./build/wubu_engine.exe games duel-stadium --frames 300 --input none \
+                          --replay "$rep_log" 2>&1)"
+echo "$rep_out" | grep -q "reproduced the run" \
+  || bad "replay: the replay did not reproduce the run"
+rep_digest="$(echo "$rep_out" | sed -n 's/.*digest \([0-9a-f]*\).*/\1/p' | head -1)"
+orig_out="$(./build/wubu_engine.exe games duel-stadium --frames 300 --input fwd 2>&1)"
+orig_digest="$(echo "$orig_out" | sed -n 's/.*digest \([0-9a-f]*\).*/\1/p' | head -1)"
+if [ -n "$rep_digest" ] && [ "$rep_digest" = "$orig_digest" ]; then
+  ok "replay: the log reproduces the run (digest $rep_digest)"
+else
+  bad "replay: the digest differs (replay '$rep_digest', original '$orig_digest')"
+fi
+
 # ---- 8. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'

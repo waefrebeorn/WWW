@@ -75,6 +75,16 @@ struct wb_host {
     float  *prev_pos;            /* 3 per entity, world z-up */
     uint8_t *prev_ok;            /* 1 per entity */
     uint32_t prev_n;             /* allocated entries */
+    /* Replay (LP-87). The log is borrowed, never owned: `rec_log` is being
+     * written, `replay_log` is being re-run, never both. `replay_actions` is what
+     * the controller applied for the current step -- the live input while
+     * recording, the recorded actions while replaying. */
+    wb_replay       *rec_log;
+    const wb_replay *replay_log;
+    wb_actions      replay_actions;
+    int             replaying;
+    int             diverged;
+    uint32_t        div_tick;
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -329,6 +339,8 @@ fail:
 
 void wb_host_close(wb_host *h) {
     if (!h) return;
+    h->rec_log = NULL;                  /* borrowed: the caller owns the log */
+    h->replay_log = NULL;
     if (h->L) lua_close(h->L);
     if (h->prof) wb_prof_dispose(h->prof);
     if (h->world) wb_world_destroy(h->world);
@@ -587,6 +599,21 @@ int wb_host_step(wb_host *h, float dt) {
     int steps = wb_det_fixed_advance(&h->acc, (double)dt);
     int rc = 0;
     for (int i = 0; i < steps; i++) {
+        const uint32_t tick = h->ticks;     /* this step's number, 0-based */
+        /* Replay: the recorded actions for this step replace the live input. A
+         * log that ends early, or whose ticks do not line up with the run, is
+         * itself a divergence -- the run did not reproduce. */
+        if (h->replay_log) {
+            if (tick >= h->replay_log->n ||
+                h->replay_log->frames[tick].tick != tick ||
+                h->replay_log->frames[tick].len != sizeof(wb_replay_step)) {
+                if (!h->diverged) { h->diverged = 1; h->div_tick = tick; }
+                break;
+            }
+            memcpy(&h->replay_actions, h->replay_log->frames[tick].data,
+                   sizeof h->replay_actions);
+            h->replaying = 1;
+        }
         WB_PROF_ZONE(pr, "script") {
             rc = wb_script_step(h->L, (float)WB_HOST_FIXED_DT);
         }
@@ -594,8 +621,8 @@ int wb_host_step(wb_host *h, float dt) {
         /* Input drives the player only when some action is held: with none, the
          * controller must leave the velocity alone, or it would silently brake
          * whatever the mode's own script asked for. */
+        wb_actions a;
         WB_PROF_ZONE(pr, "control") {
-            wb_actions a;
             wb_host_actions(h, &a);
             if (wb_actions_any(&a))
                 wb_character_apply_body(&h->ch, &h->body, &a, &h->cam,
@@ -615,6 +642,25 @@ int wb_host_step(wb_host *h, float dt) {
         wb_host_emit_sounds(h);
         h->ticks++;
         h->digest = wb_snap_digest_world(h->world, wb_host_state, 2);
+        /* Record what this step did and -- on a replay -- check that the same
+         * inputs produced the same state. The digest is the state's checksum, so a
+         * mismatch here is the first divergent tick: the exact thing LP-03 can
+         * detect and LP-87 exists to LOCALIZE. */
+        if (h->rec_log) {
+            wb_replay_step s;
+            s.fwd = a.fwd; s.back = a.back; s.left = a.left;
+            s.right = a.right; s.jump = a.jump; s.sprint = a.sprint;
+            s.digest = h->digest;
+            wb_replay_record(h->rec_log, tick, &s, sizeof s);
+        } else if (h->replay_log && tick < h->replay_log->n &&
+                   h->replay_log->frames[tick].len == sizeof(wb_replay_step)) {
+            wb_replay_step s;
+            memcpy(&s, h->replay_log->frames[tick].data, sizeof s);
+            if (s.digest != h->digest && !h->diverged) {
+                h->diverged = 1;
+                h->div_tick = tick;
+            }
+        }
         /* The objective runs on the simulation clock, not the frame clock: it
          * advances once per whole step by exactly one fixed step's worth, so a
          * match replays identically however the caller paces its frames. */
@@ -889,6 +935,7 @@ void wb_host_actions(const wb_host *h, wb_actions *out) {
     if (!out) return;
     memset(out, 0, sizeof *out);
     if (!h) return;
+    if (h->replaying) { *out = h->replay_actions; return; }
     out->fwd    = wb_input_down(&h->in, h->keys.fwd);
     out->back   = wb_input_down(&h->in, h->keys.back);
     out->left   = wb_input_down(&h->in, h->keys.left);
@@ -933,6 +980,36 @@ int wb_host_body_render_pos(const wb_host *h, uint32_t index, double out[3]) {
     }
     out[0] = cur[0]; out[1] = cur[1]; out[2] = cur[2];
     return 0;
+}
+
+/* ---- Replay (LP-87) -------------------------------------------------------- */
+
+int wb_host_record_start(wb_host *h, wb_replay *r) {
+    if (!h || !r || !r->frames) return -1;
+    h->rec_log = r;
+    h->replay_log = NULL;
+    h->replaying = 0;
+    h->diverged = 0;
+    h->div_tick = 0;
+    return 0;
+}
+
+int wb_host_replay_start(wb_host *h, const wb_replay *r) {
+    if (!h || !r || !r->frames || r->n == 0) return -1;
+    h->replay_log = r;
+    h->rec_log = NULL;
+    h->replaying = 0;
+    h->diverged = 0;
+    h->div_tick = 0;
+    return 0;
+}
+
+int wb_host_replay_diverged(const wb_host *h) {
+    return h ? h->diverged : 0;
+}
+
+uint32_t wb_host_replay_divergence_tick(const wb_host *h) {
+    return h ? h->div_tick : 0;
 }
 
 int wb_host_render(wb_host *h, wb_framebuffer *fb) {

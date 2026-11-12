@@ -108,6 +108,23 @@ static const char *kDriftLua =
     "  wb.set_vel(wb.player, { 2, 0, 0 })\n"
     "end\n";
 
+/* A mode whose script does nothing at all: the ONLY thing that can move the
+ * player is the input. That is what makes a record/replay test meaningful -- the
+ * recorded actions are the whole cause of the run. */
+static const char *kWalkJson =
+    "{\n"
+    "  \"name\": \"walk-stadium\",\n"
+    "  \"version\": \"1.0.0\",\n"
+    "  \"entry\": \"main.lua\",\n"
+    "  \"max_players\": 4,\n"
+    "  \"teams\": 1,\n"
+    "  \"spawns\": [ { \"pos\": [0, 0, 0], \"team\": -1, \"tag\": \"landing\" } ]\n"
+    "}\n";
+
+static const char *kWalkLua =
+    "function step(dt)\n"
+    "end\n";
+
 int main(void) {
     write_file("build/host/omniverse-hub/mode.json", kHubJson);
     write_file("build/host/omniverse-hub/main.lua", kHubLua);
@@ -115,6 +132,8 @@ int main(void) {
     write_file("build/host/duel-stadium/main.lua", kStadiumLua);
     write_file("build/host/drift-stadium/mode.json", kDriftJson);
     write_file("build/host/drift-stadium/main.lua", kDriftLua);
+    write_file("build/host/walk-stadium/mode.json", kWalkJson);
+    write_file("build/host/walk-stadium/main.lua", kWalkLua);
 
     char err[1024];
 
@@ -133,7 +152,7 @@ int main(void) {
     CHECK(wb_host_instance(h)[0] != 0, "the player is in a live instance");
 
     /* both gametypes under the root were registered */
-    CHECK(wb_worldspace_mode_count(wb_host_space(h)) == 3,
+    CHECK(wb_worldspace_mode_count(wb_host_space(h)) == 4,
           "every mode.json under the root was registered");
 
     /* the DECLARED spawn points were installed before any script ran */
@@ -364,6 +383,73 @@ int main(void) {
                   "a body with no previous state is drawn where it is");
             wb_host_close(h);
         }
+    }
+
+    /* ---- record / replay (LP-87) ------------------------------------------ */
+    /* A run is recorded as the actions each step applied and the digest each
+     * step produced. A replay re-runs those actions and compares, so a run can be
+     * REPRODUCED rather than merely observed -- and the first divergent tick is
+     * the difference between "the checksum disagreed" and "here is where". */
+    h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+    CHECK(h != NULL, "the walk mode opens");
+    if (h) {
+        wb_replay log;
+        CHECK(wb_replay_init(&log, 256) == 0, "the replay log is created");
+        CHECK(wb_host_record_start(h, &log) == 0, "recording starts");
+        wb_host_input_key_down(h, 'W');            /* the whole cause of the run */
+        for (int i = 0; i < 120; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        CHECK(log.n == 120, "every fixed step was recorded");
+        CHECK(wb_replay_verify(&log) == 1, "the recorded log verifies");
+        double moved[3];
+        wb_host_player_pos(h, moved);
+        CHECK(moved[0] != 0.0 || moved[1] != 0.0,
+              "the recorded input actually moved the player");
+        wb_host_close(h);
+
+        /* A replay of the untouched log reproduces the run exactly. */
+        h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the walk mode reopens for the replay");
+        if (h) {
+            CHECK(wb_host_replay_start(h, &log) == 0, "the replay starts");
+            for (int i = 0; i < 120; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+            CHECK(wb_host_replay_diverged(h) == 0,
+                  "a replay of an untouched log does not diverge");
+            wb_host_close(h);
+        }
+
+        /* Tamper with one recorded digest. This stands in for an engine that
+         * computes a different state for the same inputs: the log is intact and
+         * the run no longer reproduces. The replay must LOCALIZE it. */
+        wb_replay_step st;
+        memcpy(&st, log.frames[60].data, sizeof st);
+        st.digest ^= 1u;
+        memcpy(log.frames[60].data, &st, sizeof st);
+
+        h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the walk mode reopens for the tampered replay");
+        if (h) {
+            CHECK(wb_host_replay_start(h, &log) == 0, "the tampered replay starts");
+            for (int i = 0; i < 120; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+            CHECK(wb_host_replay_diverged(h) == 1, "a tampered log diverges");
+            CHECK(wb_host_replay_divergence_tick(h) == 60,
+                  "the divergence is localized to the tampered tick");
+            wb_host_close(h);
+        }
+
+        /* And a log that ends early is itself a divergence, not a silent stop. */
+        log.n = 30;
+        h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the walk mode reopens for the short replay");
+        if (h) {
+            CHECK(wb_host_replay_start(h, &log) == 0, "the short replay starts");
+            for (int i = 0; i < 120; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+            CHECK(wb_host_replay_diverged(h) == 1,
+                  "a log that ends early diverges");
+            CHECK(wb_host_replay_divergence_tick(h) == 30,
+                  "the divergence is localized to the end of the log");
+            wb_host_close(h);
+        }
+        wb_replay_free(&log);
     }
 
     printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);

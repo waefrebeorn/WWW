@@ -238,7 +238,7 @@ test-host: build $(LUA_OBJS)
 	  src/lua/wb_space_bind.c tests/wb_host_test.c \
 	  src/core/wb_objective.c src/core/wb_hud.c src/core/wb_walk.c \
 	  src/core/wb_audio.c src/core/wb_atmos.c src/core/wb_osc.c src/core/wb_env.c \
-	  src/core/wb_biquad.c src/core/wb_reverb.c \
+	  src/core/wb_biquad.c src/core/wb_reverb.c src/core/wb_replay.c \
 	  $(LUA_OBJS) -o $(TEST_HOST) -lm -lgdi32 -luser32
 	./$(TEST_HOST)
 

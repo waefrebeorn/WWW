@@ -3,8 +3,14 @@
  */
 #include "wb_replay.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define WB_REPLAY_MAGIC "WBREPLAY"
+/* A run is minutes long; a million frames is 27 hours at 60 Hz. Refuse anything
+ * larger rather than let a corrupt count exhaust memory. */
+#define WB_REPLAY_MAX_FRAMES 1000000u
 
 /* The standard reflected CRC-32 (IEEE 802.3, the zlib variant). */
 static uint32_t wb_replay_crc_table[256];
@@ -94,3 +100,51 @@ int wb_replay_verify(const wb_replay *r) {
 }
 
 uint32_t wb_replay_crc(const wb_replay *r) { return r ? r->crc : 0; }
+
+int wb_replay_save(const wb_replay *r, const char *path) {
+    if (!r || !r->frames || !path) return -1;
+    FILE *f = fopen(path, "wb");
+    if (!f) return -1;
+    int ok = 1;
+    uint32_t n = r->n;
+    if (fwrite(WB_REPLAY_MAGIC, 1, 8, f) != 8) ok = 0;
+    if (ok && fwrite(&n, sizeof n, 1, f) != 1) ok = 0;
+    for (uint32_t i = 0; ok && i < r->n; i++) {
+        const wb_replay_frame *fr = &r->frames[i];
+        if (fwrite(&fr->tick, sizeof fr->tick, 1, f) != 1) { ok = 0; break; }
+        if (fwrite(&fr->len,  sizeof fr->len,  1, f) != 1) { ok = 0; break; }
+        if (fwrite(&fr->crc,  sizeof fr->crc,  1, f) != 1) { ok = 0; break; }
+        if (fr->len && fwrite(fr->data, 1, fr->len, f) != fr->len) { ok = 0; break; }
+    }
+    fclose(f);
+    return ok ? 0 : -1;
+}
+
+int wb_replay_load(wb_replay *r, const char *path) {
+    if (!r || !path) return -1;
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    char magic[8];
+    uint32_t n = 0;
+    int ok = fread(magic, 1, 8, f) == 8 &&
+             memcmp(magic, WB_REPLAY_MAGIC, 8) == 0;
+    if (ok && fread(&n, sizeof n, 1, f) != 1) ok = 0;
+    if (ok && n > WB_REPLAY_MAX_FRAMES) ok = 0;
+    if (!ok) { fclose(f); return -1; }
+
+    if (wb_replay_init(r, n ? n : 1) != 0) { fclose(f); return -1; }
+    for (uint32_t i = 0; i < n; i++) {
+        wb_replay_frame *fr = &r->frames[i];
+        if (fread(&fr->tick, sizeof fr->tick, 1, f) != 1) break;
+        if (fread(&fr->len,  sizeof fr->len,  1, f) != 1) break;
+        if (fread(&fr->crc,  sizeof fr->crc,  1, f) != 1) break;
+        if (fr->len > WB_REPLAY_MAX_PAYLOAD) break;
+        if (fr->len && fread(fr->data, 1, fr->len, f) != fr->len) break;
+        r->n++;
+        r->tick = fr->tick + 1;
+        r->crc = wb_replay_crc32_impl(&fr->crc, sizeof fr->crc, r->crc);
+    }
+    fclose(f);
+    if (r->n != n) { wb_replay_clear(r); return -1; }   /* short file */
+    return wb_replay_verify(r) ? 0 : -1;                /* chain must verify */
+}
