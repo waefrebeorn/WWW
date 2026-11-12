@@ -315,7 +315,19 @@ else
   bad "replay: the digest differs (replay '$rep_digest', original '$orig_digest')"
 fi
 
-# ---- 8. verdict -----------------------------------------------------------
+# ---- 8. fuzz ---------------------------------------------------------------
+# LP-87: the fuzzer's value is that a failing seed can be REPLAYED, so the gate
+# checks the round trip -- drive the input with a seeded random stream, then
+# re-run it from the log and require the two runs to agree.
+note "fuzz"
+fuzz_out="$(./build/wubu_engine.exe games duel-stadium --fuzz 20261112 --frames 400 2>&1)"
+if echo "$fuzz_out" | grep -q "reproduced"; then
+  ok "fuzz: a seeded run reproduces ($(echo "$fuzz_out" | sed -n 's/.*reproduced (\([0-9]*\) steps.*/\1/p') steps)"
+else
+  bad "fuzz: the seeded run did not reproduce"
+fi
+
+# ---- 9. verdict -----------------------------------------------------------
 if [ "$FAIL" -ne 0 ]; then
   printf '\nSLICE FAILED\n'
   exit 1

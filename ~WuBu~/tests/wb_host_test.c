@@ -452,6 +452,49 @@ int main(void) {
         wb_replay_free(&log);
     }
 
+    /* ---- fuzz (LP-87) ------------------------------------------------------ */
+    /* The fuzzer's whole value is that the SAME SEED always produces the SAME
+     * stream: a failing case must be replayable, or the fuzzer found nothing. So
+     * the gate fuzzes a run, checks a second run from the same seed is identical,
+     * and replays the log. */
+    h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+    CHECK(h != NULL, "the walk mode opens for fuzzing");
+    if (h) {
+        wb_replay flog;
+        CHECK(wb_replay_init(&flog, 256) == 0, "the fuzz log is created");
+        CHECK(wb_host_fuzz_start(h, 12345u, &flog) == 0, "the fuzzer starts");
+        for (int i = 0; i < 200; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+        CHECK(flog.n == 200, "the fuzzer recorded every step");
+        wb_host_close(h);
+
+        /* The same seed again, from scratch, must produce the same stream. */
+        h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the walk mode reopens for the second fuzz run");
+        if (h) {
+            wb_replay flog2;
+            wb_replay_init(&flog2, 256);
+            wb_host_fuzz_start(h, 12345u, &flog2);
+            for (int i = 0; i < 200; i++) wb_host_step(h, (float)WB_HOST_FIXED_DT);
+            CHECK(wb_replay_crc(&flog2) == wb_replay_crc(&flog),
+                  "the same seed produces the same stream");
+            wb_host_close(h);
+            wb_replay_free(&flog2);
+        }
+
+        /* And the log must replay to the same state. */
+        h = wb_host_open("build/host", "walk-stadium", "P1", -1, err, sizeof err);
+        CHECK(h != NULL, "the walk mode reopens for the fuzz replay");
+        if (h) {
+            CHECK(wb_host_replay_start(h, &flog) == 0, "the fuzz replay starts");
+            for (uint32_t i = 0; i < flog.n; i++)
+                wb_host_step(h, (float)WB_HOST_FIXED_DT);
+            CHECK(wb_host_replay_diverged(h) == 0,
+                  "a fuzzed run replays without diverging");
+            wb_host_close(h);
+        }
+        wb_replay_free(&flog);
+    }
+
     printf("\n=== HOST TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail ? 1 : 0;
 }

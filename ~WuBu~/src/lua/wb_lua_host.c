@@ -50,18 +50,71 @@ static int write_ppm(const char *path, const wb_framebuffer *fb) {
     return fclose(f) == 0 ? 0 : -1;
 }
 
+/* LP-87: fuzz the input with a seeded pseudo-random action stream, then RE-RUN
+ * the log and compare. Both runs must agree; if they do not, the log is saved so
+ * the failure can be reproduced rather than merely reported. The same seed always
+ * produces the same stream, which is what makes that possible -- a fuzzer on a
+ * deterministic engine is only useful if the failing case is replayable. */
+static int run_fuzz(const char *root, const char *mode, const char *player,
+                    uint64_t seed, int frames, const char *log_path) {
+    char why[1024];
+    wb_replay log;
+    if (wb_replay_init(&log, (uint32_t)frames + 16) != 0) {
+        err("cannot start a replay log");
+        return 1;
+    }
+
+    wb_host *h = wb_host_open(root, mode, player, -1, why, sizeof why);
+    if (!h) { err(why); wb_replay_free(&log); return 1; }
+    wb_host_fuzz_start(h, seed, &log);
+    for (int i = 0; i < frames; i++) {
+        if (!wb_host_running(h)) break;
+        if (wb_host_step(h, (float)WB_HOST_FIXED_DT) < 0) break;
+    }
+    wb_host_close(h);
+    if (log.n == 0) {
+        err("the fuzz run recorded nothing");
+        wb_replay_free(&log);
+        return 1;
+    }
+
+    h = wb_host_open(root, mode, player, -1, why, sizeof why);
+    if (!h) { err(why); wb_replay_free(&log); return 1; }
+    wb_host_replay_start(h, &log);
+    for (uint32_t i = 0; i < log.n; i++)
+        if (wb_host_step(h, (float)WB_HOST_FIXED_DT) < 0) break;
+    int diverged = wb_host_replay_diverged(h);
+    uint32_t tick = wb_host_replay_divergence_tick(h);
+    wb_host_close(h);
+
+    if (diverged) {
+        printf("wb: seed %llu DIVERGED at tick %u (%u steps recorded)\n",
+               (unsigned long long)seed, tick, log.n);
+        if (log_path && wb_replay_save(&log, log_path) == 0)
+            printf("wb: the failing log is at %s\n", log_path);
+        wb_replay_free(&log);
+        return 1;
+    }
+    printf("wb: seed %llu reproduced (%u steps, crc %08x)\n",
+           (unsigned long long)seed, log.n, wb_replay_crc(&log));
+    wb_replay_free(&log);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr,
                 "usage: %s <modes-root> <gametype> [player-id] "
                 "[--input fwd|back|left|right|jump|sprint|none] "
                 "[--render out.ppm] [--sound out.wav] [--window] [--frames N] "
-                "[--record log.wbr] [--replay log.wbr]\n"
+                "[--record log.wbr] [--replay log.wbr] [--fuzz seed]\n"
                 "  --window   open a window and drive it with the keyboard/mouse\n"
                 "  --frames N run at most N frames, then exit (with --window)\n"
                 "  --sound F  write the match's audio to a 16-bit stereo WAV\n"
                 "  --record F record every step's actions and digest to a replay log\n"
-                "  --replay F re-run a recorded log and report the first divergent tick\n",
+                "  --replay F re-run a recorded log and report the first divergent tick\n"
+                "  --fuzz S   drive the input with a seeded random action stream, then\n"
+                "             re-run the log and report whether it reproduced\n",
                 argv[0]);
         return 2;
     }
@@ -76,6 +129,7 @@ int main(int argc, char **argv) {
     const char *sound_path  = NULL;
     const char *record_path = NULL;
     const char *replay_path  = NULL;
+    long long   fuzz_seed    = -1;
     int use_window = 0, max_frames = 0, player_set = 0;
 
     for (int i = 3; i < argc; i++) {
@@ -89,6 +143,8 @@ int main(int argc, char **argv) {
             record_path = argv[++i];
         } else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc) {
             replay_path = argv[++i];
+        } else if (strcmp(argv[i], "--fuzz") == 0 && i + 1 < argc) {
+            fuzz_seed = strtoll(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
             max_frames = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--window") == 0) {
@@ -97,6 +153,12 @@ int main(int argc, char **argv) {
             player = argv[i];
             player_set = 1;
         }
+    }
+
+    if (fuzz_seed >= 0) {
+        int frames = max_frames > 0 ? max_frames : 600;
+        return run_fuzz(root, mode, player, (uint64_t)fuzz_seed, frames,
+                        record_path);
     }
 
     char why[1024];

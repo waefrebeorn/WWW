@@ -82,9 +82,15 @@ struct wb_host {
     wb_replay       *rec_log;
     const wb_replay *replay_log;
     wb_actions      replay_actions;
-    int             replaying;
+    int             override_actions;   /* actions from the log or the fuzzer */
     int             diverged;
     uint32_t        div_tick;
+    /* Headless fuzzing (LP-87): a deterministic pseudo-random action stream from
+     * the engine's own splitmix64. The same seed always produces the same stream,
+     * so a failing seed can be saved and replayed afterwards -- which is the whole
+     * point of fuzzing a deterministic engine. */
+    wb_det_rng      fuzz_rng;
+    int             fuzzing;
     char mode[WB_MODE_NAME_LEN];
     char instance[WB_DIST_ID_LEN];
     char err[1024];
@@ -585,6 +591,25 @@ static void wb_host_mix_audio(wb_host *h, double dt) {
     h->snd_n += (size_t)n;
 }
 
+/* The fuzzer's input: a deterministic stream of pseudo-random actions from the
+ * engine's own splitmix64. One action at a time, on roughly a third of steps --
+ * a controller held down for every step is not what a player does, and a fuzzer
+ * that never releases a key never exercises the release path. */
+static void wb_host_fuzz_actions(wb_host *h) {
+    wb_actions *a = &h->replay_actions;
+    a->fwd = a->back = a->left = a->right = a->jump = a->sprint = 0;
+    if (wb_det_rng_range(&h->fuzz_rng, 3) != 0) return;
+    switch (wb_det_rng_range(&h->fuzz_rng, 6)) {
+    case 0: a->fwd = 1;    break;
+    case 1: a->back = 1;   break;
+    case 2: a->left = 1;   break;
+    case 3: a->right = 1;  break;
+    case 4: a->jump = 1;   break;
+    case 5: a->sprint = 1; break;
+    default: break;
+    }
+}
+
 int wb_host_step(wb_host *h, float dt) {
     if (!h || !h->L) return -1;
     /* One profiler frame per caller frame, whatever it buys. The frame zone is
@@ -612,7 +637,10 @@ int wb_host_step(wb_host *h, float dt) {
             }
             memcpy(&h->replay_actions, h->replay_log->frames[tick].data,
                    sizeof h->replay_actions);
-            h->replaying = 1;
+            h->override_actions = 1;
+        } else if (h->fuzzing) {
+            wb_host_fuzz_actions(h);
+            h->override_actions = 1;
         }
         WB_PROF_ZONE(pr, "script") {
             rc = wb_script_step(h->L, (float)WB_HOST_FIXED_DT);
@@ -935,7 +963,7 @@ void wb_host_actions(const wb_host *h, wb_actions *out) {
     if (!out) return;
     memset(out, 0, sizeof *out);
     if (!h) return;
-    if (h->replaying) { *out = h->replay_actions; return; }
+    if (h->override_actions) { *out = h->replay_actions; return; }
     out->fwd    = wb_input_down(&h->in, h->keys.fwd);
     out->back   = wb_input_down(&h->in, h->keys.back);
     out->left   = wb_input_down(&h->in, h->keys.left);
@@ -988,7 +1016,8 @@ int wb_host_record_start(wb_host *h, wb_replay *r) {
     if (!h || !r || !r->frames) return -1;
     h->rec_log = r;
     h->replay_log = NULL;
-    h->replaying = 0;
+    h->fuzzing = 0;
+    h->override_actions = 0;
     h->diverged = 0;
     h->div_tick = 0;
     return 0;
@@ -998,7 +1027,20 @@ int wb_host_replay_start(wb_host *h, const wb_replay *r) {
     if (!h || !r || !r->frames || r->n == 0) return -1;
     h->replay_log = r;
     h->rec_log = NULL;
-    h->replaying = 0;
+    h->fuzzing = 0;
+    h->override_actions = 0;
+    h->diverged = 0;
+    h->div_tick = 0;
+    return 0;
+}
+
+int wb_host_fuzz_start(wb_host *h, uint64_t seed, wb_replay *r) {
+    if (!h || !r || !r->frames) return -1;
+    h->fuzzing = 1;
+    wb_det_rng_seed(&h->fuzz_rng, seed);
+    h->rec_log = r;
+    h->replay_log = NULL;
+    h->override_actions = 0;
     h->diverged = 0;
     h->div_tick = 0;
     return 0;

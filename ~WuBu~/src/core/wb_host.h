@@ -127,6 +127,13 @@ int  wb_host_record_start(wb_host *h, wb_replay *r);
  * for it), so the actions ARE the whole input to the simulation. */
 int  wb_host_replay_start(wb_host *h, const wb_replay *r);
 
+/* Fuzz the input with a deterministic pseudo-random action stream from `seed`,
+ * recording it into `r`. The same seed always produces the same stream, so a
+ * failing seed can be saved and replayed afterwards -- which is the whole point
+ * of fuzzing a deterministic engine. Verify a recorded seed with
+ * wb_host_replay_start. */
+int  wb_host_fuzz_start(wb_host *h, uint64_t seed, wb_replay *r);
+
 /* After a replay: whether it diverged, and the tick where it first did (0 when
  * it did not). A divergence means the same inputs produced a different state --
  * a desync, whatever its cause. */
