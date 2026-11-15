@@ -234,3 +234,576 @@ int wb_quic_parse_initial(const uint8_t *buf, size_t len, uint32_t version,
     in->payload_len = plen;
     return 0;
 }
+
+/* ------------------------------------------------------------------ frames */
+
+typedef struct {
+    uint8_t *p;
+    size_t   cap;
+    size_t   n;
+    int      overflow;
+} qbuf;
+
+static void qb_init(qbuf *b, uint8_t *p, size_t cap) {
+    b->p = p;
+    b->cap = cap;
+    b->n = 0;
+    b->overflow = 0;
+}
+
+static void qb_bytes(qbuf *b, const void *d, size_t n) {
+    if (b->overflow || b->n + n > b->cap) { b->overflow = 1; return; }
+    memcpy(b->p + b->n, d, n);
+    b->n += n;
+}
+
+static void qb_u8(qbuf *b, uint8_t v) {
+    if (b->overflow || b->n + 1 > b->cap) { b->overflow = 1; return; }
+    b->p[b->n++] = v;
+}
+
+static void qb_varint(qbuf *b, uint64_t v) {
+    uint8_t t[8];
+    size_t n = wb_quic_varint_encode(v, t);
+    qb_bytes(b, t, n);
+}
+
+static size_t qb_finish(qbuf *b) { return b->overflow ? 0 : b->n; }
+
+/* The Frame Type is a varint and MUST use the shortest form
+ * (RFC 9000 section 12.4), which wb_quic_varint_encode already does. */
+static void qb_type(qbuf *b, uint64_t type) { qb_varint(b, type); }
+
+/* How many bytes a frame body occupies, given its type. Returns -1 if the body
+ * is truncated or the type is not one this codec knows. */
+static long frame_body_len(uint64_t type, const uint8_t *p, size_t len) {
+    size_t q = 0, u;
+    uint64_t v;
+    switch (type) {
+    case WB_QUIC_FRAME_PING:
+    case WB_QUIC_FRAME_HANDSHAKE_DONE:
+        return 0;
+    case WB_QUIC_FRAME_PADDING:
+        /* PADDING runs to the end of the packet, so it consumes what is left */
+        return (long)len;
+    case WB_QUIC_FRAME_ACK: case 0x03: {
+        for (int i = 0; i < 2; i++) {      /* Largest Acknowledged, ACK Delay */
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+        }
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        uint64_t ranges = v;               /* ACK Range Count */
+        q += u;
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        q += u;                            /* First ACK Range */
+        for (uint64_t i = 0; i < ranges; i++) {
+            for (int k = 0; k < 2; k++) {
+                if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+                q += u;
+            }
+        }
+        if (type == 0x03) {
+            for (int k = 0; k < 3; k++) {
+                if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+                q += u;
+            }
+        }
+        return (long)q;
+    }
+    case WB_QUIC_FRAME_CRYPTO: {
+        for (int i = 0; i < 2; i++) {
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+        }
+        return (long)(q + v);
+    }
+    case WB_QUIC_FRAME_NEW_TOKEN: {
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        q += u;
+        return (long)(q + v);
+    }
+    case WB_QUIC_FRAME_RESET_STREAM:
+    case WB_QUIC_FRAME_STOP_SENDING:
+    case WB_QUIC_FRAME_MAX_STREAM_DATA:
+    case WB_QUIC_FRAME_STREAM_DATA_BLOCKED:
+    case WB_QUIC_FRAME_RETIRE_CONNECTION_ID: {
+        int fields = (type == WB_QUIC_FRAME_RESET_STREAM ||
+                      type == WB_QUIC_FRAME_STOP_SENDING ||
+                      type == WB_QUIC_FRAME_MAX_STREAM_DATA ||
+                      type == WB_QUIC_FRAME_STREAM_DATA_BLOCKED) ? 2 : 1;
+        for (int i = 0; i < fields; i++) {
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+        }
+        return (long)q;
+    }
+    case WB_QUIC_FRAME_MAX_DATA:
+    case WB_QUIC_FRAME_DATA_BLOCKED:
+    case WB_QUIC_FRAME_MAX_STREAMS: case 0x13:
+    case WB_QUIC_FRAME_STREAMS_BLOCKED: case 0x17: {
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        return (long)(q + u);
+    }
+    case WB_QUIC_FRAME_NEW_CONNECTION_ID: {
+        for (int i = 0; i < 2; i++) {
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+        }
+        if (q + 1 > len) return -1;
+        size_t cl = p[q];
+        if (cl > 20) return -1;
+        return (long)(q + 1 + cl + 16);
+    }
+    case WB_QUIC_FRAME_PATH_CHALLENGE:
+    case WB_QUIC_FRAME_PATH_RESPONSE:
+        return (len >= 8) ? 8 : -1;
+    case WB_QUIC_FRAME_CONNECTION_CLOSE: case 0x1d: {
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        q += u;
+        if (type == WB_QUIC_FRAME_CONNECTION_CLOSE) {
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+        }
+        if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+        q += u;
+        return (long)(q + v);
+    }
+    default:
+        if (type >= WB_QUIC_FRAME_STREAM_BASE &&
+            type <= WB_QUIC_FRAME_STREAM_BASE + 7) {
+            if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+            q += u;
+            if (type & WB_QUIC_STREAM_OFF) {
+                if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+                q += u;
+            }
+            if (type & WB_QUIC_STREAM_LEN) {
+                if (wb_quic_varint_decode(p + q, len - q, &v, &u) != 0) return -1;
+                q += u;
+                return (long)(q + v);
+            }
+            /* no length: the stream data runs to the end of the packet, so
+             * the whole remaining body belongs to this frame */
+            return (long)len;
+        }
+        return -1;
+    }
+}
+
+int wb_quic_frame_next(const uint8_t *buf, size_t len, size_t *off,
+                       wb_quic_frame *f) {
+    if (!buf || !off || *off > len) return -1;
+    if (*off == len) return 0;
+    size_t used = 0;
+    uint64_t type = 0;
+    if (wb_quic_varint_decode(buf + *off, len - *off, &type, &used) != 0) return -1;
+    long blen = frame_body_len(type, buf + *off + used, len - *off - used);
+    if (blen < 0) return -1;
+    if ((size_t)blen > len - *off - used) return -1;
+    f->type = type;
+    f->body = buf + *off + used;
+    f->body_len = (size_t)blen;
+    *off = *off + used + (size_t)blen;
+    return 1;
+}
+
+size_t wb_quic_frame_ping(uint8_t *out, size_t cap) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_PING);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_padding(uint8_t *out, size_t cap, size_t n) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    for (size_t i = 0; i < n && !b.overflow; i++) qb_u8(&b, 0);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_handshake_done(uint8_t *out, size_t cap) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_HANDSHAKE_DONE);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_ack(uint8_t *out, size_t cap, int ecn,
+                         uint64_t largest, uint64_t delay,
+                         const uint64_t *acked, size_t n_acked,
+                         uint64_t ect0, uint64_t ect1, uint64_t ce) {
+    if (!acked || n_acked == 0) return 0;
+
+    /* Contiguous runs, ascending. */
+    uint64_t rs[WB_QUIC_ACK_MAX_RANGES], re[WB_QUIC_ACK_MAX_RANGES];
+    int nrun = 0;
+    size_t i = 0;
+    while (i < n_acked) {
+        size_t j = i;
+        while (j + 1 < n_acked && acked[j + 1] == acked[j] + 1) j++;
+        if (nrun >= WB_QUIC_ACK_MAX_RANGES) return 0;
+        rs[nrun] = acked[i];
+        re[nrun] = acked[j];
+        nrun++;
+        i = j + 1;
+    }
+    if (acked[n_acked - 1] != largest) return 0;   /* the largest must be acked */
+
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, ecn ? 0x03u : WB_QUIC_FRAME_ACK);
+    qb_varint(&b, largest);
+    qb_varint(&b, delay);
+    qb_varint(&b, (uint64_t)(nrun - 1));            /* ACK Range Count */
+    qb_varint(&b, re[nrun - 1] - rs[nrun - 1] + 1); /* First ACK Range */
+    for (int k = nrun - 2; k >= 0; k--) {
+        /* the packets strictly between the run below and the run above */
+        qb_varint(&b, rs[k + 1] - re[k] - 1);
+        qb_varint(&b, re[k] - rs[k] + 1);
+    }
+    if (ecn) {
+        qb_varint(&b, ect0);
+        qb_varint(&b, ect1);
+        qb_varint(&b, ce);
+    }
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_ack(const uint8_t *body, size_t len, int type,
+                      wb_quic_ack *out) {
+    if (!body || !out) return -1;
+    if (type != WB_QUIC_FRAME_ACK && type != 0x03) return -1;
+    memset(out, 0, sizeof *out);
+    out->has_ecn = (type == 0x03);
+    size_t p = 0, u;
+    uint64_t v;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    out->largest = v;
+    p += u;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    out->delay = v;
+    p += u;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    if (v >= WB_QUIC_ACK_MAX_RANGES) return -1;
+    out->range_count = (int)v;
+    p += u;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    out->first_range = v;
+    p += u;
+    for (int i = 0; i < out->range_count; i++) {
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        out->gap[i] = v;
+        p += u;
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        out->range_len[i] = v;
+        p += u;
+    }
+    if (out->has_ecn) {
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        out->ect0 = v;
+        p += u;
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        out->ect1 = v;
+        p += u;
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        out->ce = v;
+        p += u;
+    }
+    if (p != len) return -1;                       /* no trailing bytes */
+    return 0;
+}
+
+uint64_t wb_quic_ack_count(const wb_quic_ack *ack) {
+    uint64_t n = ack->first_range;
+    for (int i = 0; i < ack->range_count; i++) n += ack->range_len[i];
+    return n;
+}
+
+/* Walk an ACK's ranges and hand back each acknowledged packet number. Stops at
+ * `max` entries or when the ranges run out. Returns the count written. */
+size_t wb_quic_ack_expand(const wb_quic_ack *ack, uint64_t *out, size_t max) {
+    size_t n = 0;
+    uint64_t bottom = ack->largest;
+    uint64_t top = bottom - ack->first_range + 1;
+    for (uint64_t p = top; p <= bottom && n < max; p++) out[n++] = p;
+    for (int i = 0; i < ack->range_count; i++) {
+        bottom = top - ack->gap[i] - 1;            /* top of the next range */
+        top = bottom - ack->range_len[i] + 1;
+        for (uint64_t p = top; p <= bottom && n < max; p++) out[n++] = p;
+    }
+    return n;
+}
+
+size_t wb_quic_frame_crypto(uint8_t *out, size_t cap, uint64_t offset,
+                            const void *data, size_t len) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_CRYPTO);
+    qb_varint(&b, offset);
+    qb_varint(&b, len);
+    qb_bytes(&b, data, len);
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_crypto(const uint8_t *body, size_t len, uint64_t *offset,
+                         const uint8_t **data, size_t *dlen) {
+    size_t p = 0, u;
+    uint64_t v;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    *offset = v;
+    p += u;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    p += u;
+    if (p + v > len) return -1;
+    *data = body + p;
+    *dlen = (size_t)v;
+    return 0;
+}
+
+size_t wb_quic_frame_stream(uint8_t *out, size_t cap, uint64_t stream_id,
+                            uint64_t offset, const void *data, size_t len,
+                            int fin) {
+    uint64_t type = WB_QUIC_FRAME_STREAM_BASE | WB_QUIC_STREAM_OFF |
+                    WB_QUIC_STREAM_LEN;
+    if (fin) type |= WB_QUIC_STREAM_FIN;
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, type);
+    qb_varint(&b, stream_id);
+    qb_varint(&b, offset);
+    qb_varint(&b, len);
+    qb_bytes(&b, data, len);
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_stream(const uint8_t *body, size_t len, int flags,
+                         uint64_t *stream_id, uint64_t *offset, int *has_len,
+                         const uint8_t **data, size_t *dlen, int *fin) {
+    if (!body || len < 1) return -1;
+    size_t p = 0, u;
+    uint64_t v;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    *stream_id = v;
+    p += u;
+    uint64_t off = 0;
+    if (flags & WB_QUIC_STREAM_OFF) {
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        off = v;
+        p += u;
+    }
+    *offset = off;
+    if (flags & WB_QUIC_STREAM_LEN) {
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        p += u;
+        if (p + v > len) return -1;
+        *has_len = 1;
+        *data = body + p;
+        *dlen = (size_t)v;
+    } else {
+        /* without a length the stream data runs to the end of the packet */
+        *has_len = 0;
+        *data = body + p;
+        *dlen = len - p;
+    }
+    *fin = (flags & WB_QUIC_STREAM_FIN) ? 1 : 0;
+    return 0;
+}
+
+
+size_t wb_quic_frame_new_token(uint8_t *out, size_t cap, const void *token,
+                               size_t len) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_NEW_TOKEN);
+    qb_varint(&b, len);
+    qb_bytes(&b, token, len);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_reset_stream(uint8_t *out, size_t cap, uint64_t stream_id,
+                                  uint64_t error, uint64_t final_size) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_RESET_STREAM);
+    qb_varint(&b, stream_id);
+    qb_varint(&b, error);
+    qb_varint(&b, final_size);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_stop_sending(uint8_t *out, size_t cap, uint64_t stream_id,
+                                  uint64_t error) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_STOP_SENDING);
+    qb_varint(&b, stream_id);
+    qb_varint(&b, error);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_max_data(uint8_t *out, size_t cap, uint64_t maximum) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_MAX_DATA);
+    qb_varint(&b, maximum);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_max_stream_data(uint8_t *out, size_t cap,
+                                     uint64_t stream_id, uint64_t maximum) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_MAX_STREAM_DATA);
+    qb_varint(&b, stream_id);
+    qb_varint(&b, maximum);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_max_streams(uint8_t *out, size_t cap, int uni,
+                                 uint64_t maximum) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, uni ? 0x13u : WB_QUIC_FRAME_MAX_STREAMS);
+    qb_varint(&b, maximum);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_data_blocked(uint8_t *out, size_t cap, uint64_t limit) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_DATA_BLOCKED);
+    qb_varint(&b, limit);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_stream_data_blocked(uint8_t *out, size_t cap,
+                                         uint64_t stream_id, uint64_t limit) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_STREAM_DATA_BLOCKED);
+    qb_varint(&b, stream_id);
+    qb_varint(&b, limit);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_streams_blocked(uint8_t *out, size_t cap, int uni,
+                                     uint64_t limit) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, uni ? 0x17u : WB_QUIC_FRAME_STREAMS_BLOCKED);
+    qb_varint(&b, limit);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_new_connection_id(uint8_t *out, size_t cap,
+                                       uint64_t seq, uint64_t retire_prior_to,
+                                       const uint8_t *cid, size_t cid_len,
+                                       const uint8_t token[16]) {
+    if (cid_len > 20) return 0;
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_NEW_CONNECTION_ID);
+    qb_varint(&b, seq);
+    qb_varint(&b, retire_prior_to);
+    qb_u8(&b, (uint8_t)cid_len);
+    qb_bytes(&b, cid, cid_len);
+    qb_bytes(&b, token, 16);
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_new_connection_id(const uint8_t *body, size_t len,
+                                    uint64_t *seq, uint64_t *retire_prior_to,
+                                    uint8_t *cid, size_t *cid_len,
+                                    uint8_t token[16]) {
+    size_t p = 0, u;
+    uint64_t v;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    *seq = v;
+    p += u;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    *retire_prior_to = v;
+    p += u;
+    if (p + 1 > len) return -1;
+    size_t cl = body[p++];
+    if (cl > 20 || p + cl + 16 > len) return -1;
+    memcpy(cid, body + p, cl);
+    *cid_len = cl;
+    p += cl;
+    memcpy(token, body + p, 16);
+    p += 16;
+    if (p != len) return -1;
+    return 0;
+}
+
+size_t wb_quic_frame_retire_connection_id(uint8_t *out, size_t cap,
+                                          uint64_t seq) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_RETIRE_CONNECTION_ID);
+    qb_varint(&b, seq);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_path_challenge(uint8_t *out, size_t cap,
+                                    const uint8_t data[8]) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_PATH_CHALLENGE);
+    qb_bytes(&b, data, 8);
+    return qb_finish(&b);
+}
+
+size_t wb_quic_frame_path_response(uint8_t *out, size_t cap,
+                                   const uint8_t data[8]) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, WB_QUIC_FRAME_PATH_RESPONSE);
+    qb_bytes(&b, data, 8);
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_path_data(const uint8_t *body, size_t len, uint8_t data[8]) {
+    if (!body || len != 8) return -1;
+    memcpy(data, body, 8);
+    return 0;
+}
+
+size_t wb_quic_frame_connection_close(uint8_t *out, size_t cap, int application,
+                                      uint64_t error, uint64_t frame_type,
+                                      const char *reason) {
+    qbuf b;
+    qb_init(&b, out, cap);
+    qb_type(&b, application ? 0x1du : WB_QUIC_FRAME_CONNECTION_CLOSE);
+    qb_varint(&b, error);
+    if (!application) qb_varint(&b, frame_type);
+    size_t rl = reason ? strlen(reason) : 0;
+    qb_varint(&b, rl);
+    qb_bytes(&b, reason, rl);
+    return qb_finish(&b);
+}
+
+int wb_quic_parse_connection_close(const uint8_t *body, size_t len,
+                                   int application, uint64_t *error,
+                                   uint64_t *frame_type, const char **reason,
+                                   size_t *reason_len) {
+    size_t p = 0, u;
+    uint64_t v;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    *error = v;
+    p += u;
+    uint64_t ft = 0;
+    if (!application) {
+        if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+        ft = v;
+        p += u;
+    }
+    *frame_type = ft;
+    if (wb_quic_varint_decode(body + p, len - p, &v, &u) != 0) return -1;
+    p += u;
+    if (p + v > len) return -1;
+    *reason = (const char *)(body + p);
+    *reason_len = (size_t)v;
+    p += (size_t)v;
+    if (p != len) return -1;
+    return 0;
+}
