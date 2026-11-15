@@ -14,9 +14,10 @@
 
 ## The frontier (next hops)
 
-1. **LP-95 NAT traversal** — ICE/STUN/TURN, the next netcode hop now that LP-70,
-   LP-94, LP-96 and LP-97 are shipped. Without it there is no way to reach a
-   host behind a symmetric NAT, and LP-93's browser path has no signalling.
+1. **LP-95 stone 2** — ICE on top of STUN: host and server-reflexive candidate
+   gathering, candidate pairs, foundations, priority ordering, connectivity
+   checks, and nomination. STUN is shipped; the checklist is what turns it into
+   a connection.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -125,7 +126,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
 | LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
 | LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
-| LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | TODO |
+| LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | **PARTIAL** (STUN binding shipped: the RFC 8489 header, XOR-MAPPED-ADDRESS for IPv4 and IPv6 against a hand-computed vector, the server side that answers with the address it saw, and refusal of malformed input. ICE candidate gathering/checks and the TURN relay remain) |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | **SHIPPED** (NTP's symmetric-delay offset estimator over an 8-sample window, minimum-delay sample selection, smoothed drift, and extrapolation between syncs) |
 | LP-97 | QoS / traffic shaping + per-client bandwidth budgets | M | LP-70 | [611][608][581] | **SHIPPED** (a per-client token bucket with a bounded queue and drop accounting; DSCP marking by traffic class, with WireGuard's inner-copy rule for tunnels; and a netem-style link emulator -- delay, jitter, loss, duplication, corruption, reordering and a rate limit, seeded so a failing gate replays) |
 | LP-98 | Edge / anycast server placement + orchestration | L | LP-33 | [607] | TODO |
