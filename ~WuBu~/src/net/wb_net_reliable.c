@@ -25,7 +25,10 @@
 #define WB_NET_REL_RX_QUEUE  128     /* per peer, arrived out of order */
 #define WB_NET_RED_WINDOW    16      /* recent inputs repeated in every packet */
 #define WB_NET_RED_REC_HDR   6       /* uint32 seq + uint16 len */
-#define WB_NET_REL_RTO_MAX   8       /* backoff ceiling, in doublings */
+/* Backoff ceiling, in doublings: 16x the base RTO. A higher ceiling makes a
+ * link recovery-ill; a message the wire keeps dropping must stay cheap to
+ * retry, not fade out. */
+#define WB_NET_REL_RTO_MAX   4
 
 typedef struct {
     int      used;
@@ -72,23 +75,6 @@ struct wb_net_reliable {
     uint64_t                 sent, resent, delivered;
 };
 
-/* ------------------------------------------------------------ wire codec */
-
-static void put_u32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)(v); p[1] = (uint8_t)(v >> 8);
-    p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
-}
-static void put_u16(uint8_t *p, uint16_t v) {
-    p[0] = (uint8_t)(v); p[1] = (uint8_t)(v >> 8);
-}
-static uint32_t get_u32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-static uint16_t get_u16(const uint8_t *p) {
-    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-}
-
 /* ------------------------------------------------------------ internals */
 
 static int rel_valid_peer(int peer) {
@@ -133,12 +119,12 @@ static int rel_emit(wb_net_reliable *r, int peer, wb_net_class cls,
                     uint32_t seq, const uint8_t *data, uint16_t len) {
     wb_net_datagram d;
     d.len = (uint16_t)(16 + len);
-    put_u32(d.data + 0, seq);
-    put_u32(d.data + 4, r->rx[peer].recv_next - 1u);   /* cumulative ack */
-    put_u32(d.data + 8, 0u);                            /* no selective ack */
+    wb_net_put_u32(d.data + 0, seq);
+    wb_net_put_u32(d.data + 4, r->rx[peer].recv_next - 1u);   /* cumulative ack */
+    wb_net_put_u32(d.data + 8, 0u);                            /* no selective ack */
     d.data[12] = (uint8_t)cls;
     d.data[13] = 0u;
-    put_u16(d.data + 14, len);
+    wb_net_put_u16(d.data + 14, len);
     if (len) memcpy(d.data + 16, data, len);
     return r->raw->send(r->raw, peer, &d);
 }
@@ -146,12 +132,12 @@ static int rel_emit(wb_net_reliable *r, int peer, wb_net_class cls,
 static int rel_send_ack(wb_net_reliable *r, int peer) {
     wb_net_datagram d;
     d.len = 16;
-    put_u32(d.data + 0, 0u);
-    put_u32(d.data + 4, r->rx[peer].recv_next - 1u);
-    put_u32(d.data + 8, 0u);
+    wb_net_put_u32(d.data + 0, 0u);
+    wb_net_put_u32(d.data + 4, r->rx[peer].recv_next - 1u);
+    wb_net_put_u32(d.data + 8, 0u);
     d.data[12] = (uint8_t)WB_NET_CLASS_UNS;
     d.data[13] = 0x01u;                     /* ack-only */
-    put_u16(d.data + 14, 0u);
+    wb_net_put_u16(d.data + 14, 0u);
     return r->raw->send(r->raw, peer, &d);
 }
 
@@ -207,8 +193,8 @@ int wb_net_reliable_send(wb_net_reliable *r, int peer, wb_net_class cls,
             uint16_t need = (uint16_t)(WB_NET_RED_REC_HDR + used[i]->len);
             if (plen + need > WB_NET_MAX_PAYLOAD && plen > 0) continue;
             if (plen + need > WB_NET_MAX_PAYLOAD) break;
-            put_u32(payload + plen + 0, used[i]->seq);
-            put_u16(payload + plen + 4, used[i]->len);
+            wb_net_put_u32(payload + plen + 0, used[i]->seq);
+            wb_net_put_u16(payload + plen + 4, used[i]->len);
             memcpy(payload + plen + WB_NET_RED_REC_HDR, used[i]->data, used[i]->len);
             plen += need;
         }
@@ -243,8 +229,8 @@ static void rel_recv_red(wb_net_reliable *r, int peer, const uint8_t *payload,
     wb_net_rel_rx *rx = &r->rx[peer];
     uint16_t off = 0;
     while (off + WB_NET_RED_REC_HDR <= len) {
-        uint32_t seq = get_u32(payload + off);
-        uint16_t rlen = get_u16(payload + off + 4);
+        uint32_t seq = wb_net_get_u32(payload + off);
+        uint16_t rlen = wb_net_get_u16(payload + off + 4);
         off += WB_NET_RED_REC_HDR;
         if (off + rlen > len) break;                /* truncated record */
         if ((int32_t)(seq - rx->red_next) < 0) {    /* already delivered */
@@ -264,12 +250,12 @@ static void rel_recv(void *ud, int peer, const wb_net_datagram *d) {
     if (d->len > 16 + WB_NET_MAX_PAYLOAD) return;
 
     const uint8_t *b = d->data;
-    uint32_t seq = get_u32(b + 0);
-    uint32_t ack = get_u32(b + 4);
-    uint32_t bits = get_u32(b + 8);
+    uint32_t seq = wb_net_get_u32(b + 0);
+    uint32_t ack = wb_net_get_u32(b + 4);
+    uint32_t bits = wb_net_get_u32(b + 8);
     wb_net_class cls = (wb_net_class)b[12];
     int ack_only = (b[13] & 0x01u) != 0;
-    uint16_t len = get_u16(b + 14);
+    uint16_t len = wb_net_get_u16(b + 14);
     if (len != (uint16_t)(d->len - 16)) return;    /* truncated */
 
     rel_ack(r, peer, ack, bits);
@@ -277,6 +263,12 @@ static void rel_recv(void *ud, int peer, const wb_net_datagram *d) {
 
     const uint8_t *payload = b + 16;
     wb_net_rel_rx *rx = &r->rx[peer];
+
+    /* Every REL packet -- including a retransmitted duplicate of one already
+     * delivered -- asks for an ack. The ack itself may have been lost, and the
+     * sender's retransmit is the only hint we get that it needs to hear it
+     * again; a duplicate that stayed silent could wedge the link for good. */
+    if (cls == WB_NET_CLASS_REL) rx->ack_dirty = 1;
 
     switch (cls) {
     case WB_NET_CLASS_UNS:
@@ -305,8 +297,6 @@ static void rel_recv(void *ud, int peer, const wb_net_datagram *d) {
         } else {
             rel_queue_rx(rx, seq, payload, len);
         }
-        /* Ack on the next tick, not inline: one ack covers a burst. */
-        rx->ack_dirty = 1;
         break;
     }
 }

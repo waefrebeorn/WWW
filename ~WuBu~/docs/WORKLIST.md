@@ -19,12 +19,10 @@
    interpolation on the fixed accumulator. Closes the determinism loop
    end-to-end.
 2. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
-3. **LP-87 lockstep frame-stepper** — the last open piece of LP-87, and no
-   longer blocked: LP-70's transport now exists over both the pair and a real
-   socket, so two hosts can exchange inputs and step in lock.
-4. **LP-70 stone 3** — the encrypted channel (Curve25519 + AES-GCM-256). The
+3. **LP-70 stone 3** — the encrypted channel (Curve25519 + AES-GCM-256). The
    transport and reliability are shipped over both the pair and a real UDP
-   socket; what remains is the crypto, which also serves LP-35.
+   socket, and LP-87's lockstep frame-stepper now runs on top of them; what
+   remains is the crypto, which also serves LP-35.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -65,7 +63,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 
 | pad | work item | size | depends on | best source | status |
 |---|---|---|---|---|---|
-| LP-87 | Desync prevention & triage tooling | L | LP-03 | [562][566][54] | **PARTIAL** (first-diff triage + record/replay verifier + seeded headless fuzzer shipped: a run's per-step actions and digests are logged, re-run from the log alone, and the first divergent tick is reported; the fuzzer drives the input with a seeded stream and re-plays it, so a failing seed is reproducible; a lockstep frame-stepper remains, and is no longer blocked -- LP-70's transport now exists) |
+| LP-87 | Desync prevention & triage tooling | L | LP-03 | [562][566][54] | **SHIPPED** (first-diff triage + record/replay verifier + seeded headless fuzzer + lockstep frame-stepper: a run's per-step actions and digests are logged, re-run from the log alone, and the first divergent tick is reported; the fuzzer drives the input with a seeded stream and re-plays it; and two peers over a link step the same ticks, so a digest disagreement is localized to a tick while the lock holds) |
 | LP-88 | Causal profiling (Coz) | M | LP-01 | [545][571] | TODO |
 | LP-89 | End-to-end latency measurement (input-to-photon) | M | LP-01, LP-32 | [557][556] | TODO |
 | LP-90 | Statistical benchmarking methodology | M | LP-05 | [559][564][565] | TODO |
