@@ -1,4 +1,4 @@
-# Slices 9–31 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519
+# Slices 9–33 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -31,13 +31,15 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 29 | lockstep frame-stepper | two peers exchange each tick's inputs over the link and step only when both are present, so a peer never runs ahead; a missing input stalls the lock, and a digest disagreement is reported at the exact tick while the lock holds | `make test-netls` — 845 | ✅ |
 | 30 | AES-256-GCM | the sealed channel's cipher: an AEAD, so a swapped, replayed or truncated packet is rejected rather than simulated, and the tag covers the packet header as associated data. Verified against the GCM spec's Appendix B AES-256 cases and FIPS-197 | `make test-aesgcm` — 22 | ✅ |
 | 31 | X25519 | the Curve25519 key exchange: two hosts turn a private scalar and a peer's public key into a shared secret, in constant time with respect to the scalar, refusing low-order peers. Verified against the RFC 7748 single-shot, iterated and Diffie-Hellman vectors | `make test-x25519` — 14 | ✅ |
+| 32 | SHA-256, HMAC, HKDF | the hash the key derivation stands on, and the extract-then-expand KDF that turns the shared secret into a channel key. Verified against the FIPS 180-4 vectors and the RFC 5869 test cases | `make test-sha256` — 21 | ✅ |
+| 33 | the sealed channel | X25519 + HKDF + AES-256-GCM composed: the salt is both public keys in canonical order (so the key depends on which peers are talking), the packet sequence is part of the nonce, and a tampered ciphertext, tag, header, sequence or truncation is refused rather than delivered | `make test-netc` — 153 | ✅ |
 
 ## Running totals
 
-`make test` currently: **101 gates, 9938 assertions, 0 fail.**
+`make test` currently: **103 gates, 10112 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
-PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 22 · X25519 14 · AVATAR 32 · MOD 21 ·
+PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 22 · X25519 14 · SHA256 21 · NETC 153 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
 SPACE 27 · HOST 82 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·

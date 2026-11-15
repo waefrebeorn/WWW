@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 101 gates, 9938 assertions
+mingw32-make test       # 103 gates, 10112 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -132,9 +132,11 @@ skips its own `mkdir` rule.
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
 | `src/lv/` | slerm-Lua: the C11 interpreter (arena/value/lex/parse/eval/host) |
 | `src/core/wb_hive.*`, `wb_tagheap.*`, `wb_budget.*`, `wb_frame.*`, `wb_tls.*`, `wb_atomic.*`, `wb_pool.*` | the hive memory substrate (see below) |
-| `src/net/` | networking: transport + reliability (LP-70: lossy pair + UDP socket, REL/RED/UNS) + lockstep frame-stepper (LP-87) / AOI / server / client / loopback + server meshing |
+| `src/net/` | networking: transport + reliability (LP-70: lossy pair + UDP socket, REL/RED/UNS) + lockstep frame-stepper (LP-87) + the sealed channel (X25519 + HKDF + AES-GCM) / AOI / server / client / loopback + server meshing |
 | `src/core/wb_aes_gcm.*` | AES-256-GCM, the sealed channel's AEAD cipher (LP-70 stone 3) |
 | `src/core/wb_x25519.*` | Curve25519 / X25519, the key exchange (LP-70 stone 4) |
+| `src/core/wb_sha256.*`, `wb_hkdf.*` | SHA-256, HMAC and HKDF-SHA256, the key derivation (LP-70 stone 5) |
+| `src/net/wb_net_crypto.*` | the sealed channel: X25519 + HKDF + AES-GCM composed (LP-70 stone 5) |
 | `tests/` | one harness per module |
 | `games/` | Lua game scripts |
 | `docs/` | design notes + the meta-engine assessment |
