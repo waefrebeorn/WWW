@@ -19,7 +19,6 @@
    interpolation on the fixed accumulator. Closes the determinism loop
    end-to-end.
 2. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
-3. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
