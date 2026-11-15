@@ -63,7 +63,7 @@ run-mode: $(TARGET)
 slice: build
 	$(SHELL) tools/slice.sh
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -167,6 +167,14 @@ TEST_NETT := build/wb_net_transport_test.exe
 test-nett: build
 	$(CC) $(CFLAGS) -Isrc/net $(NETT_SRC) tests/wb_net_transport_test.c -o $(TEST_NETT) -lm
 	./$(TEST_NETT)
+
+# test-netudp: LP-70 stone 2 -- the UDP socket transport. The same contract the
+# pair implements, over winsock2, with reliability layered on unchanged.
+NETUDP_SRC := src/net/wb_net_udp.c
+TEST_NETUDP := build/wb_net_udp_test.exe
+test-netudp: build
+	$(CC) $(CFLAGS) -Isrc/net $(NETT_SRC) $(NETUDP_SRC) tests/wb_net_udp_test.c -o $(TEST_NETUDP) -lm -lws2_32
+	./$(TEST_NETUDP)
 
 # test-avatar: slice 14 -- avatar rig, animation sampling, identity
 TEST_AVATAR := build/wb_avatar_test.exe

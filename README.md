@@ -17,8 +17,8 @@ WWW/
     │              (mode/spawn/worldspace), shared kernel
     ├── src/lua/   Lua 5.4 host + bindings + modding sandbox
     ├── src/lv/    → the **Wua** submodule: slerm-Lua, github.com/waefrebeorn/Wua
-    ├── src/net/   networking (transport + reliability, AOI/server/client/loopback)
-    │              + server meshing
+    ├── src/net/   networking (transport + reliability, UDP socket,
+    │              AOI/server/client/loopback) + server meshing
     ├── tests/     one harness per module — `make test` runs every gate
     ├── games/     Lua game scripts
     ├── docs/      design notes + the meta-engine assessment

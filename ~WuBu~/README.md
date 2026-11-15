@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 97 gates, 9033 assertions
+mingw32-make test       # 98 gates, 9057 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -132,7 +132,7 @@ skips its own `mkdir` rule.
 | `src/lua/` | Lua 5.4 host + `wb.*` bindings + the modding sandbox |
 | `src/lv/` | slerm-Lua: the C11 interpreter (arena/value/lex/parse/eval/host) |
 | `src/core/wb_hive.*`, `wb_tagheap.*`, `wb_budget.*`, `wb_frame.*`, `wb_tls.*`, `wb_atomic.*`, `wb_pool.*` | the hive memory substrate (see below) |
-| `src/net/` | networking: transport + reliability (LP-70) / AOI / server / client / loopback + server meshing |
+| `src/net/` | networking: transport + reliability (LP-70: lossy pair + UDP socket, REL/RED/UNS) / AOI / server / client / loopback + server meshing |
 | `tests/` | one harness per module |
 | `games/` | Lua game scripts |
 | `docs/` | design notes + the meta-engine assessment |
