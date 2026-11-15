@@ -14,11 +14,12 @@
 
 ## The frontier (next hops)
 
-1. **LP-93 stone 4** — the connection state machine: packet number spaces,
-   the ACK tracking that the ACK frame codec of stone 2 needs a home for, loss
-   detection, and key discard. Protection is shipped and vector-verified, but
-   nothing yet decides *when* to protect with which keys, and that decision is
-   what turns the primitives into a transport.
+1. **LP-93 stone 5** — the connection state machine proper: the three packet
+   number spaces as one object, the ACK tracker that decides what goes in an ACK
+   frame (and when, per RFC 9000 section 13.2.2's frequency rules), the keys
+   that are live in each space, and key discard. Stone 4 gives each space its
+   loss logic; nothing yet holds all three together or decides which one a
+   packet belongs to.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -125,7 +126,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **SHIPPED** (the datagram transport the netcode is shaped like, implemented twice over the same contract: a deterministic lossy pair and a real UDP socket on winsock2. The three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through -- run over either, with the lockstep frame-stepper on top. AES-256-GCM, the X25519 key exchange, SHA-256/HMAC/HKDF and the sealed channel are all implemented and vector-verified (RFC 7748, the GCM spec, FIPS 180-4 and RFC 5869). **SHIPPED**) |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
-| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | **PARTIAL** (stones 1-3 shipped: the varint, the packet number codec, the long header, the frame layer, and packet protection -- the Initial keys and the AES-128-GCM seal with header protection, verified byte for byte against RFC 9001 appendix A. The TLS handshake integration and the connection state machine remain) |
+| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | **PARTIAL** (stones 1-4 shipped: the varint, the packet number codec, the long header, the frame layer, packet protection verified byte for byte against RFC 9001 appendix A, and a packet number space with RFC 9002's loss detection, RTT estimators and PTO. The three spaces as one connection, the ACK tracker and key discard remain) |
 | LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
 | LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | **SHIPPED** (STUN binding with XOR-MAPPED-ADDRESS for IPv4 and IPv6, the ICE checklist with candidate and pair priorities and nomination, the TURN relay with permissions and channel binding, the offer/answer candidate encoding, and a connect-token gateway where a room token is a deterministic hash so both clients compute it) |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | **SHIPPED** (NTP's symmetric-delay offset estimator over an 8-sample window, minimum-delay sample selection, smoothed drift, and extrapolation between syncs) |
