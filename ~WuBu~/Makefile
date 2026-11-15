@@ -63,7 +63,7 @@ run-mode: $(TARGET)
 slice: build
 	$(SHELL) tools/slice.sh
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-aesgcm test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -184,6 +184,13 @@ TEST_NETLS := build/wb_net_lockstep_test.exe
 test-netls: build
 	$(CC) $(CFLAGS) -Isrc/net $(NETT_SRC) $(LOCKSTEP_SRC) tests/wb_net_lockstep_test.c -o $(TEST_NETLS) -lm
 	./$(TEST_NETLS)
+
+# test-aesgcm: LP-70 stone 3 -- AES-256-GCM, the sealed channel's cipher.
+# Vectors are the GCM spec's Appendix B AES-256 cases.
+TEST_AESGCM := build/wb_aes_gcm_test.exe
+test-aesgcm: build
+	$(CC) $(CFLAGS) -Isrc/core src/core/wb_aes_gcm.c tests/wb_aes_gcm_test.c -o $(TEST_AESGCM) -lm
+	./$(TEST_AESGCM)
 
 # test-avatar: slice 14 -- avatar rig, animation sampling, identity
 TEST_AVATAR := build/wb_avatar_test.exe
