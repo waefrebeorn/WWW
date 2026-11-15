@@ -63,7 +63,7 @@ run-mode: $(TARGET)
 slice: build
 	$(SHELL) tools/slice.sh
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-aesgcm test-x25519 test-sha256 test-netc test-netfrag test-netclock test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-aesgcm test-x25519 test-sha256 test-netc test-netfrag test-netclock test-qos test-netem test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -224,6 +224,18 @@ TEST_NETCLOCK := build/wb_net_clock_test.exe
 test-netclock: build
 	$(CC) $(CFLAGS) -Isrc/net src/net/wb_net_clock.c tests/wb_net_clock_test.c -o $(TEST_NETCLOCK) -lm
 	./$(TEST_NETCLOCK)
+
+# test-qos: LP-97 stone 1 -- the per-client token bucket and DSCP marking.
+TEST_QOS := build/wb_net_qos_test.exe
+test-qos: build
+	$(CC) $(CFLAGS) -Isrc/net src/net/wb_net_qos.c src/net/wb_net_transport.c tests/wb_net_qos_test.c -o $(TEST_QOS) -lm
+	./$(TEST_QOS)
+
+# test-netem: LP-97 stone 2 -- the netem-style link emulator.
+TEST_NETEM := build/wb_net_netem_test.exe
+test-netem: build
+	$(CC) $(CFLAGS) -Isrc/net src/net/wb_net_netem.c src/net/wb_net_transport.c tests/wb_net_netem_test.c -o $(TEST_NETEM) -lm
+	./$(TEST_NETEM)
 
 # test-avatar: slice 14 -- avatar rig, animation sampling, identity
 TEST_AVATAR := build/wb_avatar_test.exe

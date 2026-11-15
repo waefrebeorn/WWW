@@ -15,7 +15,7 @@ Requires MinGW64 gcc (`mingw32-make`, not `make`).
 ```bash
 mkdir -p build          # do this first -- see the Makefile quirk below
 mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 105 gates, 10201 assertions
+mingw32-make test       # 107 gates, 10286 assertions
 mingw32-make slice      # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
@@ -139,6 +139,8 @@ skips its own `mkdir` rule.
 | `src/net/wb_net_crypto.*` | the sealed channel: X25519 + HKDF + AES-GCM composed (LP-70 stone 5) |
 | `src/net/wb_net_frag.*` | fragmentation, reassembly and the MTU/PSN discipline (LP-94) |
 | `src/net/wb_net_clock.*` | clock synchronisation: NTP offset estimation, minimum-delay selection, drift (LP-96) |
+| `src/net/wb_net_qos.*` | the per-client token bucket and DSCP marking (LP-97 stone 1) |
+| `src/net/wb_net_netem.*` | the netem-style link emulator: delay, jitter, loss, duplication, corruption, reordering, rate (LP-97 stone 2) |
 | `tests/` | one harness per module |
 | `games/` | Lua game scripts |
 | `docs/` | design notes + the meta-engine assessment |

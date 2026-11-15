@@ -15,10 +15,8 @@
 ## The frontier (next hops)
 
 1. **LP-95 NAT traversal** — ICE/STUN/TURN, the next netcode hop now that LP-70,
-   LP-94 and LP-96 are shipped. Without it there is no way to reach a host
-   behind a symmetric NAT, and LP-93's browser path has no signalling.
-2. **LP-97 QoS / traffic shaping** — the per-client bandwidth cap, DSCP
-   discipline and network emulation the tests need.
+   LP-94, LP-96 and LP-97 are shipped. Without it there is no way to reach a
+   host behind a symmetric NAT, and LP-93's browser path has no signalling.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -129,7 +127,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
 | LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | TODO |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | **SHIPPED** (NTP's symmetric-delay offset estimator over an 8-sample window, minimum-delay sample selection, smoothed drift, and extrapolation between syncs) |
-| LP-97 | QoS / traffic shaping + per-client bandwidth budgets | M | LP-70 | [611][608][581] | TODO |
+| LP-97 | QoS / traffic shaping + per-client bandwidth budgets | M | LP-70 | [611][608][581] | **SHIPPED** (a per-client token bucket with a bounded queue and drop accounting; DSCP marking by traffic class, with WireGuard's inner-copy rule for tunnels; and a netem-style link emulator -- delay, jitter, loss, duplication, corruption, reordering and a rate limit, seeded so a failing gate replays) |
 | LP-98 | Edge / anycast server placement + orchestration | L | LP-33 | [607] | TODO |
 | LP-99 | Cross-server entity handoff wire protocol | L | LP-33 | [623][624] | TODO |
 
