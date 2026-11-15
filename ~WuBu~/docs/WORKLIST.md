@@ -14,10 +14,10 @@
 
 ## The frontier (next hops)
 
-1. **LP-95 stone 4** — the signalling half: exchanging ICE candidates over a
-   channel (the offer/answer that actually delivers them) and the connect-token
-   gateway that lets two clients find each other. STUN, ICE and TURN are
-   shipped; without exchange, the candidates never leave the host.
+1. **LP-93 stone 2** — the QUIC frame codec: the frame types of RFC 9000
+   section 19 and their layouts, starting with ACK (the ranges, which are the
+   part every implementation gets subtly wrong) and the connection-management
+   frames. The header is shipped; without frames there is nothing in a packet.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -124,7 +124,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **SHIPPED** (the datagram transport the netcode is shaped like, implemented twice over the same contract: a deterministic lossy pair and a real UDP socket on winsock2. The three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through -- run over either, with the lockstep frame-stepper on top. AES-256-GCM, the X25519 key exchange, SHA-256/HMAC/HKDF and the sealed channel are all implemented and vector-verified (RFC 7748, the GCM spec, FIPS 180-4 and RFC 5869). **SHIPPED**) |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
-| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
+| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | **PARTIAL** (stone 1 shipped: the variable-length integer, the packet number codec and the long header, all against RFC 9000's own worked examples. Frames, packet protection and the TLS integration remain) |
 | LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
 | LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | **SHIPPED** (STUN binding with XOR-MAPPED-ADDRESS for IPv4 and IPv6, the ICE checklist with candidate and pair priorities and nomination, the TURN relay with permissions and channel binding, the offer/answer candidate encoding, and a connect-token gateway where a room token is a deterministic hash so both clients compute it) |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | **SHIPPED** (NTP's symmetric-delay offset estimator over an 8-sample window, minimum-delay sample selection, smoothed drift, and extrapolation between syncs) |
