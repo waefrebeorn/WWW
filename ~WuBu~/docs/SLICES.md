@@ -1,4 +1,4 @@
-# Slices 9–42 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC
+# Slices 9–43 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC → QUIC packet protection
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -42,13 +42,14 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 40 | TURN | the relay for symmetric NATs: Allocate hands out a relayed address, Refresh keeps it alive, CreatePermission is what stops the relay being an open relay, ChannelBind shortens the forward path, and Send/Data are indications because there is nothing to acknowledge. The relay refuses an unpermitted peer and counts the refusal | `make test-turn` — 52 | ✅ |
 | 41 | signalling | the offer/answer that carries a candidate list and the ICE credentials, fixed-width records so no length can disagree with a count, capped at what fits one datagram; and the connect-token gateway, where a room token is a deterministic hash of the room name so both clients compute it, one redemption per peer, two peers per room, and tokens that expire | `make test-netsig` — 58 | ✅ |
 | 42 | QUIC wire primitives | RFC 9000's variable-length integer, the packet number codec (which spends as few bytes as the receiver's ambiguity window allows) and the long header with its Initial variant. Checked against the RFC's own worked examples: 0xc2197c5eff14e88c is 151288809941952652, and 0x9b32 after a largest of 0xa82f30ea decodes to 0xa82f9b32. Then the frame layer: a packet payload walked frame by frame, with the ACK ranges (the largest range, then Gap and Range pairs, expanded back to the exact acknowledged set), ECN counts, CRYPTO, STREAM with its four flag bits, NEW_CONNECTION_ID, RETIRE_CONNECTION_ID, PATH_CHALLENGE/RESPONSE, CONNECTION_CLOSE in both variants, and the flow-control frames | `make test-quic` — 187 | ✅ |
+| 43 | QUIC packet protection | RFC 9001: the Initial salt and the client's Destination Connection ID give the initial secret (HKDF-Extract, not Expand), then "client in"/"server in" and "quic key"/"quic iv"/"quic hp" through HKDF-Expand-Label; the payload is sealed with AES-128-GCM (the nonce is the IV XOR the packet number, the AAD the header), and a five-byte mask from AES-ECB(hp, sample) hides the packet number. Verified against appendix A byte for byte: the derived keys of A.1 and the whole 1200-byte client Initial packet of A.2 | `make test-quicprotect` — 33 | ✅ |
 
 ## Running totals
 
-`make test` currently: **112 gates, 10707 assertions, 0 fail.**
+`make test` currently: **113 gates, 10751 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
-PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 22 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 187 · AVATAR 32 · MOD 21 ·
+PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 33 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 187 · QUICPROTECT 33 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
 SPACE 27 · HOST 82 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·

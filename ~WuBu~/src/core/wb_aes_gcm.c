@@ -91,21 +91,64 @@ static void aes256_mix_columns(uint8_t st[16]) {
     }
 }
 
-void wb_aes256_block(const wb_aes256 *a, const uint8_t in[16], uint8_t out[16]) {
+/* The round keys are flat: 15*16 for AES-256, 11*16 for AES-128. `rounds` is
+ * 14 or 10. */
+static void aes_block(const uint8_t *rk, int rounds,
+                      const uint8_t in[16], uint8_t out[16]) {
     uint8_t st[16];
     memcpy(st, in, 16);
-    aes256_add_round_key(st, a->rk[0]);
-    for (int round = 1; round <= 13; round++) {
+    aes256_add_round_key(st, rk);
+    for (int round = 1; round <= rounds - 1; round++) {
         aes256_sub_bytes(st);
         aes256_shift_rows(st);
         aes256_mix_columns(st);
-        aes256_add_round_key(st, a->rk[round]);
+        aes256_add_round_key(st, rk + 16 * round);
     }
     aes256_sub_bytes(st);
     aes256_shift_rows(st);
-    aes256_add_round_key(st, a->rk[14]);
+    aes256_add_round_key(st, rk + 16 * rounds);
     memcpy(out, st, 16);
 }
+
+void wb_aes256_block(const wb_aes256 *a, const uint8_t in[16], uint8_t out[16]) {
+    aes_block(&a->rk[0][0], 14, in, out);
+}
+
+struct wb_aes128 {
+    uint8_t rk[11][16];         /* 10 rounds + 1, AES-128 */
+};
+
+static void aes128_expand(wb_aes128 *a, const uint8_t key[16]) {
+    static const uint8_t rcon[11] = { 0x00, 0x01, 0x02, 0x04, 0x08,
+                                      0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
+    uint8_t *w = &a->rk[0][0];
+    memcpy(w, key, 16);
+    for (int i = 4; i < 44; i++) {
+        uint8_t t[4];
+        memcpy(t, w + 4 * (i - 1), 4);
+        if (i % 4 == 0) {
+            uint8_t q = t[0];
+            t[0] = k_sbox[t[1]] ^ rcon[i / 4];
+            t[1] = k_sbox[t[2]];
+            t[2] = k_sbox[t[3]];
+            t[3] = k_sbox[q];
+        }
+        for (int j = 0; j < 4; j++) w[4 * i + j] = w[4 * (i - 4) + j] ^ t[j];
+    }
+}
+
+void wb_aes128_block(const wb_aes128 *a, const uint8_t in[16], uint8_t out[16]) {
+    aes_block(&a->rk[0][0], 10, in, out);
+}
+
+wb_aes128 *wb_aes128_new(const uint8_t key[16]) {
+    wb_aes128 *a = (wb_aes128 *)calloc(1, sizeof *a);
+    if (!a) return NULL;
+    aes128_expand(a, key);
+    return a;
+}
+
+void wb_aes128_free(wb_aes128 *a) { free(a); }
 
 wb_aes256 *wb_aes256_new(const uint8_t key[32]) {
     wb_aes256 *a = (wb_aes256 *)calloc(1, sizeof *a);
@@ -216,24 +259,24 @@ static void inc32(uint8_t ctr[16]) {
     }
 }
 
-static void gcm_crypt(const wb_aes256 *a, const uint8_t j0[16],
+static void gcm_crypt(const uint8_t *rk, int rounds, const uint8_t j0[16],
                       const uint8_t *in, size_t len, uint8_t *out) {
     uint8_t ctr[16], ks[16];
     memcpy(ctr, j0, 16);
     for (size_t off = 0; off < len; off += 16) {
         inc32(ctr);
-        wb_aes256_block(a, ctr, ks);
+        aes_block(rk, rounds, ctr, ks);
         size_t n = len - off < 16 ? len - off : 16;
         for (size_t i = 0; i < n; i++) out[off + i] = in[off + i] ^ ks[i];
     }
 }
 
-static int gcm_tag(const wb_aes256 *a, uint8_t j0[16], wb_gf128 h,
+static int gcm_tag(const uint8_t *rk, int rounds, uint8_t j0[16], wb_gf128 h,
                    const uint8_t *aad, size_t aad_len,
                    const uint8_t *ct, size_t ct_len, uint8_t tag[16]) {
     wb_gf128 x = ghash_message(h, aad, aad_len, ct, ct_len);
     uint8_t ej0[16];
-    wb_aes256_block(a, j0, ej0);
+    aes_block(rk, rounds, j0, ej0);
     uint8_t xb[16];
     gf_to_block(x, xb);
     for (int i = 0; i < 16; i++) tag[i] = xb[i] ^ ej0[i];
@@ -242,27 +285,27 @@ static int gcm_tag(const wb_aes256 *a, uint8_t j0[16], wb_gf128 h,
 
 /* `in` is the plaintext when sealing and the ciphertext when opening; `out` is
  * the other one. The plaintext is written only after the tag verifies. */
-static int gcm_seal(const wb_aes256 *a,
+static int gcm_seal(const uint8_t *rk, int rounds,
                     const uint8_t *iv, size_t iv_len,
                     const uint8_t *aad, size_t aad_len,
                     const uint8_t *in, size_t len,
                     uint8_t *out, const uint8_t tag[16], int encrypt) {
-    if (!a || !iv) return -1;
+    if (!rk || !iv) return -1;
     if (len && (!in || !out)) return -1;
     if (aad_len && !aad) return -1;
 
     uint8_t zero[16] = {0};
     uint8_t h[16];
-    wb_aes256_block(a, zero, h);    /* H = E(K, 0^128) */
+    aes_block(rk, rounds, zero, h);  /* H = E(K, 0^128) */
     wb_gf128 H = gf_from_block(h);
 
     uint8_t j0[16];
     gcm_j0(iv, iv_len, H, j0);
 
     if (encrypt) {
-        gcm_crypt(a, j0, in, len, out);
+        gcm_crypt(rk, rounds, j0, in, len, out);
         uint8_t made[16];
-        gcm_tag(a, j0, H, aad, aad_len, out, len, made);
+        gcm_tag(rk, rounds, j0, H, aad, aad_len, out, len, made);
         memcpy((uint8_t *)tag, made, 16);
         return 0;
     }
@@ -270,9 +313,9 @@ static int gcm_seal(const wb_aes256 *a,
     /* Verify BEFORE releasing any plaintext: a packet that fails authentication
      * must not reach the caller at all. */
     uint8_t want[16];
-    gcm_tag(a, j0, H, aad, aad_len, in, len, want);
+    gcm_tag(rk, rounds, j0, H, aad, aad_len, in, len, want);
     if (memcmp(want, tag, 16) != 0) return -1;
-    gcm_crypt(a, j0, in, len, out);
+    gcm_crypt(rk, rounds, j0, in, len, out);
     return 0;
 }
 
@@ -281,7 +324,8 @@ int wb_aes_gcm_encrypt(const wb_aes256 *a,
                        const uint8_t *aad, size_t aad_len,
                        const uint8_t *pt, size_t pt_len,
                        uint8_t *ct, uint8_t tag[16]) {
-    return gcm_seal(a, iv, iv_len, aad, aad_len, pt, pt_len, ct, tag, 1);
+    return gcm_seal(&a->rk[0][0], 14, iv, iv_len, aad, aad_len,
+                    pt, pt_len, ct, tag, 1);
 }
 
 int wb_aes_gcm_decrypt(const wb_aes256 *a,
@@ -289,5 +333,24 @@ int wb_aes_gcm_decrypt(const wb_aes256 *a,
                        const uint8_t *aad, size_t aad_len,
                        const uint8_t *ct, size_t ct_len,
                        const uint8_t tag[16], uint8_t *pt) {
-    return gcm_seal(a, iv, iv_len, aad, aad_len, ct, ct_len, pt, tag, 0);
+    return gcm_seal(&a->rk[0][0], 14, iv, iv_len, aad, aad_len,
+                    ct, ct_len, pt, tag, 0);
+}
+
+int wb_aes128_gcm_encrypt(const wb_aes128 *a,
+                          const uint8_t *iv, size_t iv_len,
+                          const uint8_t *aad, size_t aad_len,
+                          const uint8_t *pt, size_t pt_len,
+                          uint8_t *ct, uint8_t tag[16]) {
+    return gcm_seal(&a->rk[0][0], 10, iv, iv_len, aad, aad_len,
+                    pt, pt_len, ct, tag, 1);
+}
+
+int wb_aes128_gcm_decrypt(const wb_aes128 *a,
+                          const uint8_t *iv, size_t iv_len,
+                          const uint8_t *aad, size_t aad_len,
+                          const uint8_t *ct, size_t ct_len,
+                          const uint8_t tag[16], uint8_t *pt) {
+    return gcm_seal(&a->rk[0][0], 10, iv, iv_len, aad, aad_len,
+                    ct, ct_len, pt, tag, 0);
 }
