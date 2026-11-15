@@ -14,10 +14,10 @@
 
 ## The frontier (next hops)
 
-1. **LP-95 stone 2** — ICE on top of STUN: host and server-reflexive candidate
-   gathering, candidate pairs, foundations, priority ordering, connectivity
-   checks, and nomination. STUN is shipped; the checklist is what turns it into
-   a connection.
+1. **LP-95 stone 3** — TURN, the relay fallback for symmetric NATs: Allocate and
+   Refresh, CreatePermission, ChannelBind, and the Send/Data indications that
+   actually carry traffic. ICE is shipped; the relay is the case where no direct
+   or reflexive path exists at all.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
