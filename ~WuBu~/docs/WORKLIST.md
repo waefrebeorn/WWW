@@ -19,10 +19,10 @@
    interpolation on the fixed accumulator. Closes the determinism loop
    end-to-end.
 2. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
-3. **LP-70 stone 4** — X25519 and the encrypted channel. AES-256-GCM is done
-   and vector-verified; what remains is the key exchange that turns a shared
-   secret into a per-channel key, and the channel that seals packets with it.
-   That also serves LP-35.
+3. **LP-70 stone 5** — a KDF (HKDF-SHA256) and the encrypted channel. X25519
+   and AES-256-GCM are done and vector-verified; what remains is deriving a
+   per-channel key from the shared secret AND both public keys (RFC 7748 6.1),
+   and sealing packets with it. That also serves LP-35.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -126,7 +126,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-33 | Server meshing control plane | L | LP-31 | [508] | **PARTIAL** (authority handoff state machine + epoch fence shipped) |
 | LP-34 | Matchmaking & parties | L | LP-33 | [510] | **PARTIAL** (deterministic team balance shipped) |
 | LP-35 | Anti-cheat & client attestation | L | LP-31, LP-71 | [425][516] | TODO |
-| LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **PARTIAL** (the datagram transport the netcode is shaped like, implemented twice over the same contract: a deterministic lossy pair and a real UDP socket on winsock2. The three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through -- run over either, with the lockstep frame-stepper on top. AES-256-GCM is implemented and verified against the GCM spec's AES-256 vectors. The key exchange (X25519) and the encrypted channel that uses it remain) |
+| LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **PARTIAL** (the datagram transport the netcode is shaped like, implemented twice over the same contract: a deterministic lossy pair and a real UDP socket on winsock2. The three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through -- run over either, with the lockstep frame-stepper on top. AES-256-GCM and the X25519 key exchange are implemented and vector-verified. The key-derivation function and the channel that seals packets with them remain) |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
 | LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
