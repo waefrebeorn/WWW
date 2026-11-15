@@ -1,4 +1,4 @@
-# Slices 9–40 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN
+# Slices 9–41 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -40,13 +40,14 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 | 38 | STUN binding | the reflexive-address transaction (RFC 8489): a big-endian header, XOR-MAPPED-ADDRESS with the port XOR'd by the cookie's top half and the address by the cookie (IPv4) or the cookie and transaction ID (IPv6), the server side that answers with the address it saw, and refusal of malformed input. The address arithmetic is checked against a hand-computed vector | `make test-stun` — 53 | ✅ |
 | 39 | ICE | candidate priority (2^24*type + 2^8*local + 256-component), foundations over the base IP address, pair formation by component and family, redundant-candidate elimination, the 2^32*MIN(G,D) + 2*MAX(G,D) + (G>D?1:0) pair priority with its MAX/MIN property, the checklist ordered by it, and nomination of the best valid pair. Checks are driven by a reachability oracle so the tests are a table rather than a network | `make test-ice` — 71 | ✅ |
 | 40 | TURN | the relay for symmetric NATs: Allocate hands out a relayed address, Refresh keeps it alive, CreatePermission is what stops the relay being an open relay, ChannelBind shortens the forward path, and Send/Data are indications because there is nothing to acknowledge. The relay refuses an unpermitted peer and counts the refusal | `make test-turn` — 52 | ✅ |
+| 41 | signalling | the offer/answer that carries a candidate list and the ICE credentials, fixed-width records so no length can disagree with a count, capped at what fits one datagram; and the connect-token gateway, where a room token is a deterministic hash of the room name so both clients compute it, one redemption per peer, two peers per room, and tokens that expire | `make test-netsig` — 58 | ✅ |
 
 ## Running totals
 
-`make test` currently: **110 gates, 10462 assertions, 0 fail.**
+`make test` currently: **111 gates, 10520 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
-PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 22 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · AVATAR 32 · MOD 21 ·
+PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 22 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
 SPACE 27 · HOST 82 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·
