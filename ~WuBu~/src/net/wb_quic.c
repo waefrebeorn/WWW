@@ -525,11 +525,14 @@ size_t wb_quic_ack_expand(const wb_quic_ack *ack, uint64_t *out, size_t max) {
     size_t n = 0;
     uint64_t bottom = ack->largest;
     uint64_t top = bottom - ack->first_range + 1;
-    for (uint64_t p = top; p <= bottom && n < max; p++) out[n++] = p;
+    /* Descending: the largest acknowledged packet first, and within each range
+     * from its top down. Counting down by an index rather than decrementing a
+     * packet number avoids wrapping at zero. */
+    for (uint64_t k = 0; k <= bottom - top && n < max; k++) out[n++] = bottom - k;
     for (int i = 0; i < ack->range_count; i++) {
         bottom = top - ack->gap[i] - 1;            /* top of the next range */
         top = bottom - ack->range_len[i] + 1;
-        for (uint64_t p = top; p <= bottom && n < max; p++) out[n++] = p;
+        for (uint64_t k = 0; k <= bottom - top && n < max; k++) out[n++] = bottom - k;
     }
     return n;
 }

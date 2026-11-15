@@ -344,7 +344,7 @@ int main(void) {
         size_t ng = wb_quic_ack_expand(&a, got, 8);
         CHECK_EQ("six packets expand", ng, 6);
         CHECK_MEM("descending, exactly the acknowledged set", got,
-                  ((const uint64_t[]){10, 8, 7, 3, 2, 1}), 6);
+                  ((const uint64_t[]){10, 8, 7, 3, 2, 1}), 6 * (int)sizeof(uint64_t));
     }
 
     /* ---- ACK ranges: contiguous is one range, holes are gaps ---- */
