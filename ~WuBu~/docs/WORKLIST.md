@@ -14,11 +14,11 @@
 
 ## The frontier (next hops)
 
-1. **LP-03 / LP-04 completion** — wire the per-tick digest into the physics step
-   (the sim's own integration feeds `wb_snap_digest_world`) and add render
-   interpolation on the fixed accumulator. Closes the determinism loop
-   end-to-end.
-2. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
+1. **LP-95 NAT traversal** — ICE/STUN/TURN, the next netcode hop now that LP-70
+   and LP-94 are shipped. Without it there is no way to reach a host behind a
+   symmetric NAT, and LP-93's browser path has no signalling.
+2. **LP-96 clock synchronization** — the shared time base lag compensation,
+   rollback and replays all assume and none of them have.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -126,7 +126,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
 | LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
-| LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | TODO |
+| LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
 | LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | TODO |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | TODO |
 | LP-97 | QoS / traffic shaping + per-client bandwidth budgets | M | LP-70 | [611][608][581] | TODO |
