@@ -68,6 +68,17 @@ int wb_stun_parse_header(const uint8_t *buf, size_t len, uint16_t *type,
  * to MAPPED-ADDRESS. Returns 0 on success, -1 if there is none. */
 int wb_stun_find_mapped(const uint8_t *buf, size_t len, wb_stun_addr *out);
 
+/* Encode one address attribute (XOR-MAPPED-ADDRESS, or TURN's XOR-PEER-ADDRESS
+ * and XOR-RELAYED-ADDRESS, which use the same obfuscation). Returns the number
+ * of bytes written including padding. */
+size_t wb_stun_put_addr(uint8_t *out, uint16_t attr, int xor,
+                        const uint8_t txid[WB_STUN_TXID_LEN],
+                        const wb_stun_addr *a);
+
+/* Decode one address attribute value. Returns 0 on success. */
+int wb_stun_get_addr(const uint8_t *val, size_t vlen, int xor,
+                     const uint8_t txid[WB_STUN_TXID_LEN], wb_stun_addr *out);
+
 /* Build a Binding success response carrying `mapped`. Returns the length, or 0
  * if it does not fit. */
 size_t wb_stun_build_binding_success(uint8_t *out, size_t cap,

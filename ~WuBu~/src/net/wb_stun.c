@@ -65,7 +65,7 @@ int wb_stun_parse_header(const uint8_t *buf, size_t len, uint16_t *type,
 }
 
 /* Encode one address attribute. `xor` selects XOR-MAPPED-ADDRESS. */
-static size_t put_addr(uint8_t *out, uint16_t attr, int xor,
+size_t wb_stun_put_addr(uint8_t *out, uint16_t attr, int xor,
                        const uint8_t txid[WB_STUN_TXID_LEN],
                        const wb_stun_addr *a) {
     size_t alen = (a->family == 6) ? 16u : 4u;
@@ -97,7 +97,7 @@ static size_t put_addr(uint8_t *out, uint16_t attr, int xor,
     return 8u + alen + pad;
 }
 
-static int get_addr(const uint8_t *val, size_t vlen, int xor,
+int wb_stun_get_addr(const uint8_t *val, size_t vlen, int xor,
                     const uint8_t txid[WB_STUN_TXID_LEN], wb_stun_addr *out) {
     if (vlen < 8) return -1;
     if (val[0] != 0) return -1;
@@ -148,7 +148,7 @@ int wb_stun_find_mapped(const uint8_t *buf, size_t len, wb_stun_addr *out) {
     if (pick < 0) return -1;
     p = (size_t)pick;
     uint16_t al = rd16(buf + p + 2);
-    return get_addr(buf + p + 4, al, pick == have_xor, txid, out);
+    return wb_stun_get_addr(buf + p + 4, al, pick == have_xor, txid, out);
 }
 
 size_t wb_stun_build_binding_success(uint8_t *out, size_t cap,
@@ -165,7 +165,7 @@ size_t wb_stun_build_binding_success(uint8_t *out, size_t cap,
     be16(out + 2, (uint16_t)(4u + vlen));
     be32(out + 4, WB_STUN_MAGIC_COOKIE);
     memcpy(out + 8, txid, WB_STUN_TXID_LEN);
-    put_addr(out + WB_STUN_HEADER, WB_STUN_ATTR_XOR_MAPPED_ADDRESS, 1, txid, mapped);
+    wb_stun_put_addr(out + WB_STUN_HEADER, WB_STUN_ATTR_XOR_MAPPED_ADDRESS, 1, txid, mapped);
     return total;
 }
 
