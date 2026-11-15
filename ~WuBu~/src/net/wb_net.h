@@ -7,8 +7,10 @@
  * engine's existing quadkey spatial core -- the same index that drives
  * streaming and sharding -- so bandwidth is O(nearby), not O(world).
  *
- * Transport is abstract (`wb_net_transport`) so the same netcode runs over UDP,
- * a loopback pipe (tests), or a relay. Nothing here touches sockets.
+ * Transport is abstract (`wb_net_transport`, in wb_net_transport.h) so the same
+ * netcode runs over UDP, a loopback pipe (tests), or a relay. Nothing here
+ * touches sockets; `wb_net_reliable` layers sequencing, acks and redundancy on
+ * top of any transport.
  *
  * The server, client and loopback transports have their own headers
  * (wb_net_server.h, wb_net_client.h, wb_net_loopback.h) so a caller pulls in

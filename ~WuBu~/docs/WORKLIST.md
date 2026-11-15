@@ -21,6 +21,10 @@
 2. **LP-06 job system** — the scheduler everything in Wave 2 is shaped like.
 3. **LP-87 desync triage** — makes the LP-03 checksum diagnosable, not just
    detectable (pairs with the frontier).
+4. **LP-70 stone 2** — the UDP socket transport. Stone 1 shipped the transport
+   abstraction and the REL/RED/UNS reliability over it; nothing touches
+   winsock yet, so the lockstep frame-stepper is still blocked. Encryption
+   (Curve25519 + AES-GCM) comes after the socket.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -124,7 +128,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-33 | Server meshing control plane | L | LP-31 | [508] | **PARTIAL** (authority handoff state machine + epoch fence shipped) |
 | LP-34 | Matchmaking & parties | L | LP-33 | [510] | **PARTIAL** (deterministic team balance shipped) |
 | LP-35 | Anti-cheat & client attestation | L | LP-31, LP-71 | [425][516] | TODO |
-| LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | TODO |
+| LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **PARTIAL** (the datagram transport the netcode is shaped like: a transport vtable, a deterministic lossy pair as the reference, and the three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through. A UDP socket transport and the encrypted channel remain) |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
 | LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | TODO |
