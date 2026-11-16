@@ -230,3 +230,49 @@ uint64_t wb_quic_space_largest_received(const wb_quic_space *s, int *has) {
 uint64_t wb_quic_space_min_received(const wb_quic_space *s) {
     return s ? s->min_recv_pn : 0;
 }
+
+int wb_quic_space_pn_bytes(const wb_quic_space *s, uint64_t full_pn) {
+    if (!s) return 1;
+    uint64_t num_unacked;
+    if (s->has_largest_acked) {
+        num_unacked = (full_pn > s->largest_acked_pn)
+                          ? full_pn - s->largest_acked_pn : 1;
+    } else {
+        num_unacked = full_pn + 1;
+    }
+
+    /* floor(log2(num_unacked)), without floating point */
+    int k = 0;
+    while (k < 63 && (UINT64_C(1) << (k + 1)) <= num_unacked) k++;
+
+    /* RFC 9000 appendix A.2: min_bits = log(num_unacked, 2) + 1. When
+     * num_unacked is exactly a power of two the log is whole, so the real
+     * formula gives one bit fewer than floor(log2) + 2 would. */
+    int min_bits = ((UINT64_C(1) << k) == num_unacked) ? k + 1 : k + 2;
+    int bytes = (min_bits + 7) / 8;
+    if (bytes < 1) bytes = 1;
+    if (bytes > 4) bytes = 4;
+    return bytes;
+}
+
+int wb_quic_recv_packet(wb_quic_space *s, size_t pn_offset, int pn_nbits,
+                        const uint8_t *pkt, size_t len,
+                        uint64_t *full_pn, size_t *payload_off) {
+    if (!s || !pkt) return -1;
+    if (pn_nbits != 8 && pn_nbits != 16 && pn_nbits != 24 && pn_nbits != 32)
+        return -1;
+    size_t pnl = (size_t)pn_nbits / 8;
+    if (len < pn_offset + pnl) return -1;
+
+    uint64_t truncated = 0;
+    for (size_t i = 0; i < pnl; i++)
+        truncated = (truncated << 8) | pkt[pn_offset + i];
+
+    int has = 0;
+    uint64_t largest = wb_quic_space_largest_received(s, &has);
+    uint64_t full = wb_quic_space_decode_pn(largest, has, truncated, pn_nbits);
+
+    if (full_pn) *full_pn = full;
+    if (payload_off) *payload_off = pn_offset + pnl;
+    return wb_quic_space_receive(s, full);
+}

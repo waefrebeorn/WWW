@@ -157,6 +157,21 @@ int wb_quic_space_receive(wb_quic_space *s, uint64_t pn);
 uint64_t wb_quic_space_largest_received(const wb_quic_space *s, int *has);
 uint64_t wb_quic_space_min_received(const wb_quic_space *s);
 
+/* How many bytes the sender should spend on the next packet number, RFC 9000
+ * section 17.1 and appendix A.2: enough bits to represent more than twice the
+ * range between the largest acknowledged packet and the one being sent. `1`
+ * before anything is acknowledged, `4` at most. */
+int wb_quic_space_pn_bytes(const wb_quic_space *s, uint64_t full_pn);
+
+/* The receive join: a clear packet (protection already removed), the offset
+ * and width of its packet number, and the space it belongs to. Reconstructs
+ * the full number, suppresses duplicates and reports where the frames start.
+ * Returns 1 if the packet is new and should be processed, 0 if it is a
+ * duplicate, -1 on bad arguments. */
+int wb_quic_recv_packet(wb_quic_space *s, size_t pn_offset, int pn_nbits,
+                        const uint8_t *pkt, size_t len,
+                        uint64_t *full_pn, size_t *payload_off);
+
 #ifdef __cplusplus
 }
 #endif

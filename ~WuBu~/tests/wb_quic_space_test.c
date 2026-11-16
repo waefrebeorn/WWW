@@ -337,6 +337,101 @@ int main(void) {
                  0x9b33);
     }
 
+
+    /* ---- choosing the encoding (RFC 9000 section 17.1, appendix A.2) ---- */
+    {
+        wb_quic_space e;
+        wb_quic_space_init(&e, 0);
+        CHECK_EQ("nothing acknowledged: one byte", wb_quic_space_pn_bytes(&e, 0), 1);
+        /* the rule counts unacknowledged packets including the new one, so
+         * the last one-byte number is 127: 128 of them need 8 bits */
+        CHECK_EQ("one byte at 127", wb_quic_space_pn_bytes(&e, 127), 1);
+        CHECK_EQ("two bytes at 128", wb_quic_space_pn_bytes(&e, 128), 2);
+        CHECK_EQ("and at 255", wb_quic_space_pn_bytes(&e, 255), 2);
+        CHECK_EQ("and at 256", wb_quic_space_pn_bytes(&e, 256), 2);
+        CHECK_EQ("two bytes at 32767", wb_quic_space_pn_bytes(&e, 32767), 2);
+        CHECK_EQ("three at 32768", wb_quic_space_pn_bytes(&e, 32768), 3);
+
+        /* A.2's two examples */
+        wb_quic_space a2;
+        wb_quic_space_init(&a2, 0);
+        for (int i = 0; i < 5; i++) wb_quic_space_send(&a2, 10, 1, 0);
+        wb_quic_space_acked(&a2, 0xabe8b3ull - 1);   /* nothing is in flight, so
+                                                        this only sets the ack */
+        /* set the largest acknowledged directly, as an ACK would */
+        a2.largest_acked_pn = 0xabe8b3ull;
+        a2.has_largest_acked = 1;
+        CHECK_EQ("A.2: 29519 unacked is 16 bits",
+                 wb_quic_space_pn_bytes(&a2, 0xac5c02ull), 2);
+        CHECK_EQ("A.2: 65611 unacked is 24 bits",
+                 wb_quic_space_pn_bytes(&a2, 0xace8feull), 3);
+
+        /* a number at or below the largest acknowledged still gets one byte */
+        CHECK_EQ("below the largest", wb_quic_space_pn_bytes(&a2, 0xabe8b3ull), 1);
+        CHECK_EQ("and NULL is safe", wb_quic_space_pn_bytes(NULL, 9), 1);
+    }
+
+    /* ---- the receive join ---- */
+    {
+        wb_quic_space r;
+        wb_quic_space_init(&r, 0);
+        /* a clear packet: one header byte, an 8-byte connection ID, a one-byte
+         * packet number, then two frame bytes */
+        uint8_t pkt[32] = {0x40, 1,2,3,4,5,6,7,8, 0, 0x01, 0x00};
+        size_t off = 0;
+        uint64_t full = 0;
+        CHECK(wb_quic_recv_packet(&r, 9, 8, pkt, sizeof pkt, &full, &off) == 1,
+              "the first packet is new");
+        CHECK_EQ("and its number is zero", full, 0);
+        CHECK_EQ("and the frames start at 10", off, 10);
+
+        CHECK(wb_quic_recv_packet(&r, 9, 8, pkt, sizeof pkt, &full, &off) == 0,
+              "the same one again is a duplicate");
+        CHECK_EQ("and the number is still zero", full, 0);
+
+        /* the next one, truncated to the low byte */
+        pkt[9] = 1;
+        CHECK(wb_quic_recv_packet(&r, 9, 8, pkt, sizeof pkt, &full, &off) == 1,
+              "the next packet is new");
+        CHECK_EQ("and decodes to one", full, 1);
+
+        /* a wide encoding after a narrow one: 0x0102 in two bytes */
+        uint8_t big[32] = {0x40, 1,2,3,4,5,6,7,8, 0x01, 0x02, 0x00};
+        CHECK(wb_quic_recv_packet(&r, 9, 16, big, sizeof big, &full, &off) == 1,
+              "a wider packet is new");
+        CHECK_EQ("and decodes to 0x102", full, 0x102);
+        CHECK_EQ("with the payload after it", off, 11);
+
+        /* a packet below the floor is dropped */
+        int all_new = 1;
+        for (uint32_t i = 0; i < WB_QUIC_RECV_MAX + 5; i++) {
+            uint8_t p[32] = {0x40, 1,2,3,4,5,6,7,8, 0, 0};
+            uint16_t v = (uint16_t)(0x200 + i);   /* a real 16-bit number */
+            p[9] = (uint8_t)(v >> 8);
+            p[10] = (uint8_t)v;
+            if (wb_quic_recv_packet(&r, 9, 16, p, sizeof p, NULL, NULL) != 1)
+                all_new = 0;
+        }
+        CHECK(all_new, "every packet in a long run is new");
+        CHECK_EQ("the largest is the last one",
+                 wb_quic_space_largest_received(&r, NULL),
+                 (uint64_t)(0x200 + WB_QUIC_RECV_MAX + 4));
+        /* a wide encoding can decode below the floor, where a narrow one
+         * cannot: decode always lands within half a window of the largest */
+        uint8_t oldp[32] = {0x40, 1,2,3,4,5,6,7,8, 0, 1, 0x00};
+        CHECK(wb_quic_recv_packet(&r, 9, 16, oldp, sizeof oldp, &full, &off) == 0,
+              "a wide packet below the floor is dropped");
+        CHECK_EQ("and it decoded to one", full, 1);
+        CHECK(wb_quic_recv_packet(&r, 9, 8, pkt, sizeof pkt, &full, &off) == 1,
+              "a narrow one decodes near the largest instead");
+        CHECK(wb_quic_recv_packet(NULL, 9, 8, pkt, sizeof pkt, NULL, NULL) == -1,
+              "and a NULL space is refused");
+        CHECK(wb_quic_recv_packet(&r, 9, 7, pkt, sizeof pkt, NULL, NULL) == -1,
+              "and a bad width is refused");
+        CHECK(wb_quic_recv_packet(&r, 9, 8, pkt, 9, NULL, NULL) == -1,
+              "and a packet too short for its number is refused");
+    }
+
     printf("\n=== QUIC SPACE TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail != 0;
 }
