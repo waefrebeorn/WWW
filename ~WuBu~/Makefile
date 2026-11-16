@@ -287,7 +287,7 @@ test-quicspace: build
 # send an ACK and which ranges go in it.
 TEST_QUICACK := build/wb_quic_ack_test.exe
 test-quicack: build
-	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic_ack.c src/net/wb_quic.c tests/wb_quic_ack_test.c -o $(TEST_QUICACK) -lm
+	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic_ack.c src/net/wb_quic.c src/net/wb_quic_space.c tests/wb_quic_ack_test.c -o $(TEST_QUICACK) -lm
 	./$(TEST_QUICACK)
 
 # test-quicconn: LP-93 stone 6 -- the three packet number spaces as one

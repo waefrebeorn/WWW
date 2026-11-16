@@ -1,4 +1,4 @@
-# Slices 9–49 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC → QUIC packet protection → the packet number space → the ACK tracker → the connection's three spaces → a packet on the wire → the short header and 1-RTT → the packet number as the receiver sees it
+# Slices 9–50 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC → QUIC packet protection → the packet number space → the ACK tracker → the connection's three spaces → a packet on the wire → the short header and 1-RTT → the packet number as the receiver sees it → the ACK round trip
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -56,12 +56,14 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 
 | 49 | the packet number as the receiver sees it | a space's receive side: reconstruct a full packet number from its truncated form exactly as RFC 9000 appendix A.3 says, then suppress duplicates with a bounded window and a floor below which old packets are dropped |
 
+| 50 | the ACK round trip | a parsed ACK frame offered to a space: every packet number it covers is dropped from in flight, an RTT sample is taken only when the largest acknowledged packet is newly acknowledged, and the loss set is recomputed from the packet threshold |
+
 ## Running totals
 
-`make test` currently: **118 gates, 11068 assertions, 0 fail.**
+`make test` currently: **118 gates, 11096 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
-PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 33 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 193 · QUICPROTECT 33 · QUICSPACE 99 · QUICACK 36 · QUICCONN 54 · QUICPACKET 61 · QUICSHORT 61 · AVATAR 32 · MOD 21 ·
+PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 33 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 193 · QUICPROTECT 33 · QUICSPACE 99 · QUICACK 64 · QUICCONN 54 · QUICPACKET 61 · QUICSHORT 61 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
 SPACE 27 · HOST 82 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·

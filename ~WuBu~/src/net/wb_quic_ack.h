@@ -28,6 +28,9 @@
 #ifndef WB_QUIC_ACK_H
 #define WB_QUIC_ACK_H
 
+#include "wb_quic.h"
+#include "wb_quic_space.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -72,6 +75,14 @@ void wb_quic_ack_track_sent(wb_quic_ack_track *t);
 
 /* How many packet numbers are tracked. */
 int wb_quic_ack_track_count(const wb_quic_ack_track *t);
+
+/* Apply a parsed ACK frame to a packet number space: expand it and offer every
+ * number it covers to wb_quic_space_acked, which drops the in-flight records
+ * and may take an RTT sample. Returns how many were in flight and are now
+ * acknowledged, or -1 on bad arguments. `*sampled` is set if any of them
+ * produced an RTT sample (RFC 9002 section 5.1), which is what makes a loss
+ * decision or a probe timeout possible. */
+int wb_quic_ack_apply(const wb_quic_ack *ack, wb_quic_space *s, int *sampled);
 
 #ifdef __cplusplus
 }

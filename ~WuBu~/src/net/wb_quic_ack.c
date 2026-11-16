@@ -4,6 +4,7 @@
 #include "wb_quic_ack.h"
 
 #include "wb_quic.h"
+#include "wb_quic_space.h"
 
 #include <string.h>
 
@@ -99,4 +100,20 @@ void wb_quic_ack_track_sent(wb_quic_ack_track *t) {
 
 int wb_quic_ack_track_count(const wb_quic_ack_track *t) {
     return t ? t->n : 0;
+}
+
+int wb_quic_ack_apply(const wb_quic_ack *ack, wb_quic_space *s, int *sampled) {
+    if (!ack || !s) return -1;
+    if (sampled) *sampled = 0;
+
+    uint64_t pns[WB_QUIC_ACK_MAX];
+    size_t n = wb_quic_ack_expand(ack, pns, WB_QUIC_ACK_MAX);
+    int acked = 0;
+    for (size_t i = 0; i < n; i++) {
+        int before = s->n_sent;
+        int r = wb_quic_space_acked(s, pns[i]);
+        if (s->n_sent < before) acked++;
+        if (r == 0 && sampled) *sampled = 1;
+    }
+    return acked;
 }

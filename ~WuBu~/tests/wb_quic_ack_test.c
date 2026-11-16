@@ -181,6 +181,107 @@ int main(void) {
         CHECK_EQ("with the newest largest", a.largest, WB_QUIC_ACK_MAX + 19);
     }
 
+
+    /* ---- applying an ACK to a packet number space (stone 10) ---- */
+    {
+        wb_quic_space sp;
+        wb_quic_space_init(&sp, 1000);
+        for (int i = 0; i < 5; i++)
+            wb_quic_space_send(&sp, 100, 1, 0);
+        CHECK_EQ("five packets in flight", sp.n_sent, 5);
+
+        /* an ACK covering only the largest */
+        uint8_t body[32];
+        const uint64_t one[1] = {4};
+        size_t bl = wb_quic_frame_ack(body, sizeof body, 0, 4, 0, one, 1, 0, 0, 0);
+        wb_quic_ack a;
+        CHECK(wb_quic_parse_ack(body + 1, bl - 1, WB_QUIC_FRAME_ACK, &a) == 0,
+              "the ACK parses");
+        int sampled = 0;
+        CHECK_EQ("one packet acknowledged", wb_quic_ack_apply(&a, &sp, &sampled), 1);
+        CHECK(sampled, "and it took an RTT sample");
+        CHECK_EQ("so four remain in flight", sp.n_sent, 4);
+        int has = 0;
+        CHECK_EQ("the largest acknowledged is 4",
+                 wb_quic_space_largest_acked(&sp, &has), 4);
+        CHECK(has, "and there is one");
+
+        /* RFC 9002 section 6.1: with the largest at 4, packets at or below
+         * 4 - 3 are lost by the packet threshold */
+        uint64_t lost[16];
+        uint64_t lt = 0;
+        size_t nl = wb_quic_space_lost(&sp, lost, 16, &lt);
+        CHECK_EQ("two are declared lost", nl, 2);
+        CHECK_EQ("the oldest first", lost[0], 0);
+        CHECK_EQ("then the next", lost[1], 1);
+        CHECK_EQ("and only two remain in flight", sp.n_sent, 2);
+
+        /* acknowledging a lower packet is not a new largest, so it must not
+         * take a sample -- that is what rules out retransmission ambiguity */
+        uint8_t b2[32];
+        const uint64_t two[1] = {2};
+        size_t bl2 = wb_quic_frame_ack(b2, sizeof b2, 0, 2, 0, two, 1, 0, 0, 0);
+        wb_quic_ack a2;
+        CHECK(wb_quic_parse_ack(b2 + 1, bl2 - 1, WB_QUIC_FRAME_ACK, &a2) == 0,
+              "a lower ACK parses");
+        sampled = 0;
+        CHECK_EQ("it acknowledges what is in flight",
+                 wb_quic_ack_apply(&a2, &sp, &sampled), 1);
+        CHECK(!sampled, "but takes no RTT sample");
+        CHECK_EQ("and the largest does not move",
+                 wb_quic_space_largest_acked(&sp, &has), 4);
+
+        /* the same ACK twice: the second is a no-op */
+        sampled = 0;
+        CHECK_EQ("a repeated ACK acknowledges nothing",
+                 wb_quic_ack_apply(&a2, &sp, &sampled), 0);
+        CHECK(!sampled, "and samples nothing");
+
+        /* an ACK for a packet that was never sent is not an error */
+        uint8_t b3[32];
+        const uint64_t far[1] = {900};
+        size_t bl3 = wb_quic_frame_ack(b3, sizeof b3, 0, 900, 0, far, 1, 0, 0, 0);
+        wb_quic_ack a3;
+        CHECK(wb_quic_parse_ack(b3 + 1, bl3 - 1, WB_QUIC_FRAME_ACK, &a3) == 0,
+              "an unknown ACK parses");
+        CHECK_EQ("and acknowledges nothing", wb_quic_ack_apply(&a3, &sp, NULL), 0);
+
+        /* a range that covers several packets at once */
+        wb_quic_space s2;
+        wb_quic_space_init(&s2, 1000);
+        for (int i = 0; i < 8; i++)
+            wb_quic_space_send(&s2, 100, 1, 0);
+        uint8_t b4[32];
+        const uint64_t four[4] = {4, 5, 6, 7};
+        size_t bl4 = wb_quic_frame_ack(b4, sizeof b4, 0, 7, 0, four, 4, 0, 0, 0);
+        wb_quic_ack a4;
+        CHECK(wb_quic_parse_ack(b4 + 1, bl4 - 1, WB_QUIC_FRAME_ACK, &a4) == 0,
+              "a ranged ACK parses");
+        CHECK_EQ("it covers four packets", wb_quic_ack_count(&a4), 4);
+        sampled = 0;
+        CHECK_EQ("and acknowledges all four",
+                 wb_quic_ack_apply(&a4, &s2, &sampled), 4);
+        CHECK(sampled, "with one sample");
+
+        /* a non-ack-eliciting packet is acknowledged but never samples */
+        wb_quic_space s3;
+        wb_quic_space_init(&s3, 1000);
+        wb_quic_space_send(&s3, 100, 0, 1);   /* padding only: in flight, not
+                                                ack-eliciting */
+        uint8_t b5[32];
+        const uint64_t zero[1] = {0};
+        size_t bl5 = wb_quic_frame_ack(b5, sizeof b5, 0, 0, 0, zero, 1, 0, 0, 0);
+        wb_quic_ack a5;
+        CHECK(wb_quic_parse_ack(b5 + 1, bl5 - 1, WB_QUIC_FRAME_ACK, &a5) == 0,
+              "the ACK parses");
+        sampled = 0;
+        CHECK_EQ("it is acknowledged", wb_quic_ack_apply(&a5, &s3, &sampled), 1);
+        CHECK(!sampled, "but takes no sample");
+
+        CHECK(wb_quic_ack_apply(NULL, &s3, NULL) == -1, "a NULL ACK is refused");
+        CHECK(wb_quic_ack_apply(&a5, NULL, NULL) == -1, "a NULL space is refused");
+    }
+
     printf("\n=== QUIC ACK TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail != 0;
 }
