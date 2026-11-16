@@ -262,6 +262,38 @@ int main(void) {
         /* the length field really covers the packet number and payload */
         CHECK_EQ("an Initial is header + token fields + body", n2,
                  1 + 4 + 1 + 8 + 1 + 4 + 1 + 1 + 1);
+
+        /* RFC 9000 section 17.2: the Length field covers the Payload, and the
+         * Payload is the AEAD output with its tag. So for a protected packet
+         * it is packet number + payload + 16, not packet number + payload. */
+        {
+            uint8_t probe[64];
+            const uint8_t pdcid[4] = {1, 2, 3, 4};
+            const uint8_t pscid[4] = {5, 6, 7, 8};
+            const uint8_t ppay[20] = {0};
+            wb_quic_initial pi;
+            memset(&pi, 0, sizeof pi);
+            pi.payload = ppay;
+            pi.payload_len = sizeof ppay;
+            pi.packet_number = 7;
+            size_t pn_ = wb_quic_build_initial(probe, sizeof probe, pdcid, 4,
+                                              pscid, 4, &pi);
+            CHECK(pn_ > 0, "a probe Initial builds");
+            /* header 1+4+1+4+1+4 = 15, token length 1, length 1, pn 1 */
+            uint64_t lenv = 0;
+            size_t used = 0;
+            CHECK(wb_quic_varint_decode(probe + 16, pn_ - 16, &lenv, &used) == 0,
+                  "the length field is where expected");
+            CHECK_EQ("the length counts the packet number, the payload and the tag",
+                     lenv, 1 + sizeof ppay + 16);
+            wb_quic_hdr ph;
+            wb_quic_initial pgot;
+            CHECK(wb_quic_parse_initial(probe, pn_, WB_QUIC_VERSION_1, &ph,
+                                        &pgot) == 0,
+                  "and it still round-trips");
+            CHECK_EQ("with the payload intact", pgot.payload_len, sizeof ppay);
+            CHECK_EQ("and the packet number", pgot.packet_number, 7);
+        }
     }
 
     /* ---- a packet that does not fit is refused ---- */

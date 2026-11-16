@@ -101,7 +101,9 @@ size_t wb_quic_build_initial(uint8_t *out, size_t cap,
                              const uint8_t *scid, size_t scid_len,
                              const wb_quic_initial *in);
 
-/* Parse an Initial. Returns 0 on success. */
+/* Parse an Initial. Returns 0 on success. `buf` must be a packet whose
+ * protection has been removed: the Length field counts the AEAD tag, so
+ * the payload is read as Length - PacketNumber - 16. */
 int wb_quic_parse_initial(const uint8_t *buf, size_t len, uint32_t version,
                           wb_quic_hdr *hdr, wb_quic_initial *in);
 

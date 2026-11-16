@@ -40,6 +40,12 @@ extern "C" {
 #define WB_QUIC_SAMPLE_LEN   16
 #define WB_QUIC_MASK_LEN      5
 
+/* The AEAD tag every long packet carries; the Initial Length field counts it. */
+#define WB_QUIC_GCM_TAG_LEN  16
+
+/* The largest packet this stack will open. */
+#define WB_QUIC_PACKET_MAX   65536
+
 typedef struct {
     uint8_t secret[WB_QUIC_SECRET_LEN];
     uint8_t key[WB_QUIC_KEY_LEN];

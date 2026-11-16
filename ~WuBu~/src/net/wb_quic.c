@@ -170,7 +170,12 @@ size_t wb_quic_build_initial(uint8_t *out, size_t cap,
 
     uint8_t pnbuf[4];
     size_t pn_bytes = wb_quic_pn_encode(in->packet_number, 0, 0, pnbuf);
-    uint64_t body = (uint64_t)pn_bytes + in->payload_len;
+    /* RFC 9000 section 17.2: the Length field "includes both the Packet Number
+     * and Payload fields". The Payload field is the AEAD output, tag included
+     * (RFC 9001 section 5.1), so a protected packet's length is sixteen more
+     * than the buffer this builds holds before protection. RFC 9001 A.2's
+     * Initial has 4 + 1162 + 16 = 1182. */
+    uint64_t body = (uint64_t)pn_bytes + in->payload_len + 16u;
 
     uint8_t tlen[8], lenb[8];
     size_t tl = wb_quic_varint_encode(in->token_len, tlen);
@@ -227,8 +232,10 @@ int wb_quic_parse_initial(const uint8_t *buf, size_t len, uint32_t version,
     in->packet_number = raw;      /* truncated; the caller decodes it */
     p += pn_bytes;
 
-    if (body < pn_bytes) return -1;
-    size_t plen = (size_t)(body - pn_bytes);
+    /* The Length field counts the AEAD tag, which is not in this buffer once
+     * the packet has been unprotected. */
+    if (body < pn_bytes + 16u) return -1;
+    size_t plen = (size_t)(body - pn_bytes - 16u);
     if (p + plen > len) return -1;
     in->payload = buf + p;
     in->payload_len = plen;

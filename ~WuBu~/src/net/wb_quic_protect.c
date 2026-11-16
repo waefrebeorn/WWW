@@ -102,12 +102,15 @@ int wb_quic_protect(const wb_quic_keys *k,
     if (rc != 0) return -1;
     memcpy(payload + plen, tag, 16);
 
-    /* The sample is the first 16 bytes of the protected payload. With a
-     * payload shorter than 16 bytes this would have to be a larger sample
-     * offset, which QUIC forbids. */
-    if (plen + 16 < WB_QUIC_SAMPLE_LEN) return -1;
+    /* RFC 9001 section 5.4.2: the sample is taken from an offset of four bytes
+     * after the start of the packet number field -- "the Packet Number field is
+     * assumed to be 4 bytes long (its maximum possible encoded length)" --
+     * precisely because the receiver does not yet know the encoded length.
+     * Sampling relative to `pn_len` would only be correct for four-byte
+     * numbers. The packet must be long enough to hold the sample. */
+    if (*len < pn_offset + 4 + WB_QUIC_SAMPLE_LEN) return -1;
     uint8_t mask[WB_QUIC_MASK_LEN];
-    wb_quic_hp_mask(k->hp, payload, mask);
+    wb_quic_hp_mask(k->hp, pkt + pn_offset + 4, mask);
     /* A long header's first byte keeps its four high bits; a short header's
      * keeps three. The caller tells us which this is. */
     wb_quic_hp_apply(pkt, pn_offset, pn_len, mask, 1);
@@ -123,11 +126,13 @@ int wb_quic_unprotect(const wb_quic_keys *k,
     if (*len < pn_offset + pn_len + 16) return -1;
 
     size_t hdr_len = pn_offset + pn_len;
+    if (*len < hdr_len + 16) return -1;
+    /* RFC 9001 section 5.4.2: four bytes after the packet number, always. */
+    if (*len < pn_offset + 4 + WB_QUIC_SAMPLE_LEN) return -1;
     size_t clen = *len - hdr_len - 16;
-    if (clen + 16 < WB_QUIC_SAMPLE_LEN) return -1;
 
     uint8_t mask[WB_QUIC_MASK_LEN];
-    wb_quic_hp_mask(k->hp, pkt + hdr_len, mask);
+    wb_quic_hp_mask(k->hp, pkt + pn_offset + 4, mask);
     wb_quic_hp_apply(pkt, pn_offset, pn_len, mask, long_header);
 
     /* the restored header carries the packet number, which is the nonce */
