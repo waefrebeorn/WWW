@@ -73,7 +73,7 @@ int wb_quic_packet_build(uint8_t *out, size_t *len, size_t cap,
     }
     *len = p;
 
-    return wb_quic_protect(k, out, len, cap, pn_offset, (size_t)pn_len, pn);
+    return wb_quic_protect(k, out, len, cap, pn_offset, (size_t)pn_len, pn, 1);
 }
 
 int wb_quic_packet_open(uint8_t *pkt, size_t *len,

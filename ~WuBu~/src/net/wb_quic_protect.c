@@ -37,6 +37,8 @@ void wb_quic_initial_keys(const uint8_t *dcid, size_t dcid_len,
         return;
     derive_one(secret, "client in", client);
     derive_one(secret, "server in", server);
+    client->key_phase = 0;
+    server->key_phase = 0;
 }
 
 void wb_quic_hp_mask(const uint8_t hp[WB_QUIC_HP_LEN],
@@ -72,7 +74,8 @@ static void packet_nonce(const uint8_t iv[WB_QUIC_IV_LEN], uint64_t pn,
 
 int wb_quic_protect(const wb_quic_keys *k,
                     uint8_t *pkt, size_t *len, size_t cap,
-                    size_t pn_offset, size_t pn_len, uint64_t pn) {
+                    size_t pn_offset, size_t pn_len, uint64_t pn,
+                    int long_header) {
     if (!k || !pkt || !len || pn_len == 0 || pn_len > 4) return -1;
     if (*len < pn_offset + pn_len) return -1;
     if (cap < *len + 16) return -1;
@@ -112,8 +115,9 @@ int wb_quic_protect(const wb_quic_keys *k,
     uint8_t mask[WB_QUIC_MASK_LEN];
     wb_quic_hp_mask(k->hp, pkt + pn_offset + 4, mask);
     /* A long header's first byte keeps its four high bits; a short header's
-     * keeps three. The caller tells us which this is. */
-    wb_quic_hp_apply(pkt, pn_offset, pn_len, mask, 1);
+     * keeps three. The caller tells us which this is, and it must match the
+     * value the opener will use, or the two masks disagree. */
+    wb_quic_hp_apply(pkt, pn_offset, pn_len, mask, long_header);
 
     *len += 16;
     return 0;

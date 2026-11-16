@@ -43,14 +43,14 @@ extern "C" {
 /* The AEAD tag every long packet carries; the Initial Length field counts it. */
 #define WB_QUIC_GCM_TAG_LEN  16
 
-/* The largest packet this stack will open. */
-#define WB_QUIC_PACKET_MAX   65536
-
 typedef struct {
     uint8_t secret[WB_QUIC_SECRET_LEN];
     uint8_t key[WB_QUIC_KEY_LEN];
     uint8_t iv[WB_QUIC_IV_LEN];
     uint8_t hp[WB_QUIC_HP_LEN];
+    /* Which key phase this set is (RFC 9001 section 6). Not protected; a
+     * receiver picks the set by trying. */
+    int key_phase;
 } wb_quic_keys;
 
 /* The v1 Initial salt, from RFC 9001 section 5.2. Future versions pick a
@@ -83,11 +83,15 @@ void wb_quic_hp_apply(uint8_t *hdr, size_t pn_offset, size_t pn_len,
  * the buffer holds the protected packet and `*len` is its new length, which is
  * the old length plus the 16-byte tag. `cap` is the buffer's capacity.
  *
+ * `long_header` selects how many bits of the first byte the mask covers: four
+ * for a long header, five for a short one (RFC 9000 section 17.3).
+ *
  * Returns 0, or -1 if the buffer is too small, the packet number does not fit
  * in `pn_len`, or the keys are unusable. */
 int wb_quic_protect(const wb_quic_keys *k,
                     uint8_t *pkt, size_t *len, size_t cap,
-                    size_t pn_offset, size_t pn_len, uint64_t pn);
+                    size_t pn_offset, size_t pn_len, uint64_t pn,
+                    int long_header);
 
 /* The reverse. `pkt` holds the protected packet of `*len` bytes; on success it
  * holds the unprotected packet (header restored, payload in the clear) and

@@ -141,7 +141,7 @@ int main(void) {
     n += 1162;
     CHECK_EQ_BYTES("the unprotected packet is 1184 bytes", n, 1184);
 
-    CHECK(wb_quic_protect(&client, pkt, &n, sizeof pkt, 18, 4, 2) == 0,
+    CHECK(wb_quic_protect(&client, pkt, &n, sizeof pkt, 18, 4, 2, 1) == 0,
           "the packet protects");
     CHECK_EQ_BYTES("and grows by the 16-byte tag", n, 1200);
 
@@ -186,7 +186,7 @@ int main(void) {
     uint8_t tiny[64];
     size_t tn = unhex("c300000001088394c8f03e5157080000449e", tiny, sizeof tiny);
     CHECK_EQ_BYTES("an 18-byte header", tn, 18);
-    CHECK(wb_quic_protect(&client, tiny, &tn, sizeof tiny, 18, 4, 1) == -1,
+    CHECK(wb_quic_protect(&client, tiny, &tn, sizeof tiny, 18, 4, 1, 1) == -1,
           "a payload too short to sample is refused");
 
     /* the packet number must fit the header's encoding */
@@ -194,7 +194,7 @@ int main(void) {
     size_t n2 = unhex(UNPROTECTED_HDR, pkt2, sizeof pkt2);
     memcpy(pkt2 + n2, payload_buf, 1162);
     n2 += 1162;
-    CHECK(wb_quic_protect(&client, pkt2, &n2, sizeof pkt2, 18, 1, 300) == -1,
+    CHECK(wb_quic_protect(&client, pkt2, &n2, sizeof pkt2, 18, 1, 300, 1) == -1,
           "a packet number that does not fit is refused");
 
     /* the server's keys protect the server's packets, and a client packet
