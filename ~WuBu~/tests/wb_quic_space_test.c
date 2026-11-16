@@ -223,6 +223,21 @@ int main(void) {
                  wb_quic_space_pto(&s, 50, 1, 1), 6050);
     }
 
+    /* ---- the packet number ceiling ---- */
+    {
+        wb_quic_space s;
+        wb_quic_space_init(&s, 0);
+        CHECK(!wb_quic_space_pn_exhausted(&s), "a fresh space has numbers left");
+        s.next_pn = WB_QUIC_PN_MAX;
+        CHECK(!wb_quic_space_pn_exhausted(&s),
+              "the last number is still usable");
+        CHECK_EQ("and one packet takes it", wb_quic_space_send(&s, 10, 1, 0),
+                 WB_QUIC_PN_MAX);
+        CHECK(wb_quic_space_pn_exhausted(&s),
+              "then the space is exhausted");
+        CHECK(wb_quic_space_pn_exhausted(NULL) == 0, "and NULL is safe");
+    }
+
     printf("\n=== QUIC SPACE TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail != 0;
 }

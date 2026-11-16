@@ -14,11 +14,12 @@
 
 ## The frontier (next hops)
 
-1. **LP-93 stone 6** — the three spaces as one connection: which keys are live
-   in each space, which space an outgoing packet belongs to, and what happens to
-   a space when its keys are discarded (RFC 9002 A.11). Stones 4 and 5 give the
-   sender's loss logic and the receiver's ACK logic; nothing yet joins them to a
-   connection, so nothing decides *which* space a packet goes out in.
+1. **LP-93 stone 7** — the send path end to end: build a protected packet for a
+   space (the header, the frames, the payload, the seal, the header-protection
+   mask) and unprotect one on the receive side, choosing the keys by space. The
+   pieces exist -- stone 1's header, stone 2's frames, stone 3's protection,
+   stone 6's keys -- but nothing composes them, so no code path can yet put a
+   frame on the wire inside a real packet.
 
 Then LP-02/LP-05, and Wave 2 (render) opens.
 
@@ -125,7 +126,7 @@ Then LP-02/LP-05, and Wave 2 (render) opens.
 | LP-70 | Transport & reliability layer (reliable-UDP, encryption) | L | LP-28 | [507] | **SHIPPED** (the datagram transport the netcode is shaped like, implemented twice over the same contract: a deterministic lossy pair and a real UDP socket on winsock2. The three message classes -- REL sequenced/acked/retransmitted, RED a window of recent inputs repeated in every packet, UNS pass-through -- run over either, with the lockstep frame-stepper on top. AES-256-GCM, the X25519 key exchange, SHA-256/HMAC/HKDF and the sealed channel are all implemented and vector-verified (RFC 7748, the GCM spec, FIPS 180-4 and RFC 5869). **SHIPPED**) |
 | LP-71 | Interest management beyond the quadkey (variable AOI, priority, visibility) | L | LP-31 | [511][507][516] | TODO |
 | LP-72 | Headless dedicated-server simulation & netcode QoS telemetry | L | LP-32, LP-33 | [517][515][509] | TODO |
-| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | **PARTIAL** (stones 1-5 shipped: the varint, the packet number codec, the long header, the frame layer, packet protection verified byte for byte against RFC 9001 appendix A, a packet number space with RFC 9002's loss detection and RTT estimators, and the ACK tracker. The three spaces as one connection, and key discard, remain) |
+| LP-93 | QUIC / WebTransport transport + migration + browser path | L | LP-70 | [579][614][578] | **PARTIAL** (stones 1-6 shipped: the varint, the packet number codec, the long header, the frame layer, packet protection verified byte for byte against RFC 9001 appendix A, a packet number space with RFC 9002's loss detection, the ACK tracker, and the three spaces as one connection with key discard. Nothing yet composes a frame into a protected packet on the wire) |
 | LP-94 | Packet fragmentation / reassembly + MTU/PSN | M | LP-70 | [577] | **SHIPPED** (fragment type on the wire, MTU budget clamped to the datagram type's 1216 bytes, 16-bit PSN with modular wrap ordering, loss amplification left visible: a message with a missing fragment is never delivered) |
 | LP-95 | NAT traversal (ICE/STUN/TURN) + relay | L | LP-70 | [613] | **SHIPPED** (STUN binding with XOR-MAPPED-ADDRESS for IPv4 and IPv6, the ICE checklist with candidate and pair priorities and nomination, the TURN relay with permissions and channel binding, the offer/answer candidate encoding, and a connect-token gateway where a room token is a deterministic hash so both clients compute it) |
 | LP-96 | Clock synchronization / time authority | M | LP-70 | [610][612] | **SHIPPED** (NTP's symmetric-delay offset estimator over an 8-sample window, minimum-delay sample selection, smoothed drift, and extrapolation between syncs) |

@@ -54,6 +54,11 @@ extern "C" {
 /* No loss pending. */
 #define WB_QUIC_NO_LOSS ((uint64_t)-1)
 
+/* RFC 9000 section 17.1: a space runs from 0 to 2^62-1, and at that point the
+ * sender MUST close the connection without sending a CONNECTION_CLOSE or any
+ * further packet. */
+#define WB_QUIC_PN_MAX ((UINT64_C(1) << 62) - 1)
+
 #define WB_QUIC_SPACE_MAX 256
 
 typedef struct {
@@ -116,6 +121,10 @@ uint64_t wb_quic_space_loss_delay(const wb_quic_space *s);
  * the peer is not expected to delay Initial or Handshake acknowledgements. */
 uint64_t wb_quic_space_pto(const wb_quic_space *s, uint64_t max_ack_delay_us,
                            int handshake_confirmed, int backoff);
+
+/* Whether the next packet number would exceed RFC 9000's 2^62-1 ceiling, which
+ * means the connection must close instead of sending it. */
+int wb_quic_space_pn_exhausted(const wb_quic_space *s);
 
 #ifdef __cplusplus
 }

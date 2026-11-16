@@ -147,3 +147,7 @@ uint64_t wb_quic_space_pto(const wb_quic_space *s, uint64_t max_ack_delay_us,
     if (duration < WB_QUIC_GRANULARITY_US) duration = WB_QUIC_GRANULARITY_US;
     return duration;
 }
+
+int wb_quic_space_pn_exhausted(const wb_quic_space *s) {
+    return s && s->next_pn > WB_QUIC_PN_MAX;
+}
