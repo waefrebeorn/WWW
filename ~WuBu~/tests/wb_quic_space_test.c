@@ -238,6 +238,105 @@ int main(void) {
         CHECK(wb_quic_space_pn_exhausted(NULL) == 0, "and NULL is safe");
     }
 
+
+    /* ---- decoding a truncated packet number (RFC 9000 appendix A.3) ---- */
+    {
+        /* the RFC's own example */
+        CHECK_EQ("A.3's example",
+                 wb_quic_space_decode_pn(0xa82f30eaull, 1, 0x9b32, 16),
+                 0xa82f9b32ull);
+
+        /* nothing received yet: the first packet decodes as itself */
+        CHECK_EQ("the first packet", wb_quic_space_decode_pn(0, 0, 0, 8), 0);
+        CHECK_EQ("the first, at 255", wb_quic_space_decode_pn(0, 0, 255, 8), 255);
+
+        /* a small expected number must not underflow the first guard: the
+         * pseudocode's `expected_pn - pn_hwin` wraps in C */
+        CHECK_EQ("no underflow at 0", wb_quic_space_decode_pn(0, 1, 1, 8), 1);
+        CHECK_EQ("no underflow at 5", wb_quic_space_decode_pn(5, 1, 5, 8), 5);
+        CHECK_EQ("a low number below a small largest",
+                 wb_quic_space_decode_pn(5, 1, 250, 8), 250);
+
+        /* the wrap cases */
+        CHECK_EQ("wrapping up", wb_quic_space_decode_pn(1000, 1, 249, 8), 1017);
+        CHECK_EQ("wrapping down", wb_quic_space_decode_pn(400, 1, 0, 8), 512);
+        CHECK_EQ("wrapping down again",
+                 wb_quic_space_decode_pn(300, 1, 50, 8), 306);
+
+        /* each width */
+        CHECK_EQ("16 bits", wb_quic_space_decode_pn(65535, 1, 0, 16), 65536);
+        CHECK_EQ("24 bits", wb_quic_space_decode_pn(0xffffff, 1, 0, 24),
+                 0x1000000ull);
+        CHECK_EQ("32 bits", wb_quic_space_decode_pn(0xffffffff, 1, 0, 32),
+                 0x100000000ull);
+
+        /* the top of the space: A.3's guard `candidate < 2^62 - pn_win` stops
+         * it from stepping up and leaving the legal range, even though the
+         * step would be closer. Here the candidate is 222 below the expected
+         * number and the step up would be 34 above it -- but 34 above is past
+         * 2^62-1, so the candidate stands. */
+        CHECK_EQ("at the ceiling, do not leave the range",
+                 wb_quic_space_decode_pn(WB_QUIC_PN_MAX - 1, 1, 1, 8),
+                 ((WB_QUIC_PN_MAX - 1) & ~UINT64_C(0xff)) | 1);
+
+        /* a bad width is not a number at all */
+        CHECK_EQ("a bad width", wb_quic_space_decode_pn(1, 1, 1, 7), 0);
+    }
+
+    /* ---- duplicate suppression (RFC 9000 section 12.3) ---- */
+    {
+        wb_quic_space d;
+        wb_quic_space_init(&d, 1000);
+        int has = 0;
+        CHECK_EQ("nothing received", wb_quic_space_largest_received(&d, &has), 0);
+        CHECK_EQ("and no largest yet", has, 0);
+
+        CHECK(wb_quic_space_receive(&d, 5), "the first packet is new");
+        CHECK(!wb_quic_space_receive(&d, 5), "and the same one is a duplicate");
+        CHECK(wb_quic_space_receive(&d, 7), "a higher one is new");
+        CHECK(!wb_quic_space_receive(&d, 5),
+              "an old one is still a duplicate while it is remembered");
+        CHECK(wb_quic_space_receive(&d, 6), "one in between is new");
+        CHECK(!wb_quic_space_receive(&d, 6), "and only once");
+        CHECK_EQ("the largest is 7", wb_quic_space_largest_received(&d, &has), 7);
+        CHECK_EQ("and there is one", has, 1);
+
+        /* a retransmission of the largest is a duplicate too */
+        CHECK(!wb_quic_space_receive(&d, 7), "the largest again is a duplicate");
+        CHECK(wb_quic_space_receive(&d, 8), "and the next is new");
+
+        /* the floor rises and eventually forgets */
+        for (uint64_t i = 9; i <= WB_QUIC_RECV_MAX + 40; i++)
+            wb_quic_space_receive(&d, i);
+        CHECK_EQ("the largest has moved",
+                 wb_quic_space_largest_received(&d, &has),
+                 WB_QUIC_RECV_MAX + 40);
+        CHECK(wb_quic_space_min_received(&d) > 0,
+              "and the floor has risen above zero");
+        CHECK(!wb_quic_space_receive(&d, 8),
+              "a packet below the floor is dropped without a lookup");
+        CHECK(!wb_quic_space_receive(&d, 0), "and so is the very first one");
+
+        /* a space is independent of its own send side */
+        CHECK_EQ("the send side is untouched", d.next_pn, 0);
+    }
+
+    /* ---- decode then receive, as a receiver does ---- */
+    {
+        wb_quic_space r;
+        wb_quic_space_init(&r, 0);
+        /* a sender at 0xa82f30ea sends the next packet truncated to 16 bits */
+        uint64_t full = wb_quic_space_decode_pn(
+            wb_quic_space_largest_received(&r, NULL), 0, 0x9b32, 16);
+        CHECK_EQ("with nothing received, it is itself", full, 0x9b32);
+        CHECK(wb_quic_space_receive(&r, full), "and it is new");
+        /* the next one, after 0xa82f9b32, still truncates to 0x9b33 */
+        CHECK_EQ("the next one decodes from the new largest",
+                 wb_quic_space_decode_pn(wb_quic_space_largest_received(&r, NULL),
+                                         1, 0x9b33, 16),
+                 0x9b33);
+    }
+
     printf("\n=== QUIC SPACE TESTS: %d pass, %d fail ===\n", g_pass, g_fail);
     return g_fail != 0;
 }

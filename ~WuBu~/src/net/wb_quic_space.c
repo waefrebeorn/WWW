@@ -151,3 +151,82 @@ uint64_t wb_quic_space_pto(const wb_quic_space *s, uint64_t max_ack_delay_us,
 int wb_quic_space_pn_exhausted(const wb_quic_space *s) {
     return s && s->next_pn > WB_QUIC_PN_MAX;
 }
+
+uint64_t wb_quic_space_decode_pn(uint64_t largest_pn, int has_largest_pn,
+                                 uint64_t truncated_pn, int pn_nbits) {
+    if (pn_nbits != 8 && pn_nbits != 16 && pn_nbits != 24 && pn_nbits != 32)
+        return 0;
+    uint64_t expected_pn = has_largest_pn ? largest_pn + 1 : 0;
+    uint64_t pn_win = (UINT64_C(1) << pn_nbits);
+    uint64_t pn_hwin = pn_win / 2;
+    uint64_t pn_mask = pn_win - 1;
+
+    uint64_t candidate_pn = (expected_pn & ~pn_mask) | truncated_pn;
+
+    /* RFC 9000 appendix A.3. The first guard needs `expected_pn >= pn_hwin`:
+     * without it the subtraction underflows in unsigned arithmetic and the
+     * condition is true for every small expected number. */
+    if (has_largest_pn && expected_pn >= pn_hwin &&
+        candidate_pn <= expected_pn - pn_hwin &&
+        candidate_pn < (UINT64_C(1) << 62) - pn_win)
+        return candidate_pn + pn_win;
+    if (has_largest_pn && candidate_pn > expected_pn + pn_hwin &&
+        candidate_pn >= pn_win)
+        return candidate_pn - pn_win;
+    return candidate_pn;
+}
+
+int wb_quic_space_receive(wb_quic_space *s, uint64_t pn) {
+    if (!s) return 0;
+
+    if (!s->has_largest_recv) {
+        s->largest_recv_pn = pn;
+        s->has_largest_recv = 1;
+        s->min_recv_pn = 0;
+        s->n_recv = 0;
+        s->recv[s->n_recv++] = pn;
+        return 1;
+    }
+
+    if (pn > s->largest_recv_pn) {
+        s->largest_recv_pn = pn;
+        /* the floor rises with the largest number, keeping a bounded window */
+        s->min_recv_pn = (s->largest_recv_pn > WB_QUIC_RECV_MAX)
+                             ? s->largest_recv_pn - WB_QUIC_RECV_MAX
+                             : 0;
+    } else if (pn < s->min_recv_pn) {
+        /* too old to be worth remembering: RFC 9000 section 12.3 lets an
+         * endpoint drop these outright rather than grow state forever */
+        return 0;
+    } else {
+        for (int i = 0; i < s->n_recv; i++)
+            if (s->recv[i] == pn) return 0;   /* a duplicate */
+    }
+
+    /* remember it, newest first, dropping the oldest when full */
+    if (s->n_recv >= WB_QUIC_RECV_MAX) {
+        for (int i = s->n_recv - 1; i > 0; i--) s->recv[i] = s->recv[i - 1];
+        s->n_recv = WB_QUIC_RECV_MAX - 1;
+    }
+    for (int i = s->n_recv - 1; i >= 0; i--)
+        if (s->recv[i] < pn) {
+            for (int j = s->n_recv; j > i + 1; j--) s->recv[j] = s->recv[j - 1];
+            s->recv[i + 1] = pn;
+            s->n_recv++;
+            return 1;
+        }
+    for (int j = s->n_recv; j > 0; j--) s->recv[j] = s->recv[j - 1];
+    s->recv[0] = pn;
+    s->n_recv++;
+    return 1;
+}
+
+uint64_t wb_quic_space_largest_received(const wb_quic_space *s, int *has) {
+    if (!s) { if (has) *has = 0; return 0; }
+    if (has) *has = s->has_largest_recv;
+    return s->largest_recv_pn;
+}
+
+uint64_t wb_quic_space_min_received(const wb_quic_space *s) {
+    return s ? s->min_recv_pn : 0;
+}

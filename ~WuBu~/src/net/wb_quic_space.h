@@ -61,6 +61,12 @@ extern "C" {
 
 #define WB_QUIC_SPACE_MAX 256
 
+/* How many received packet numbers a space remembers for duplicate
+ * suppression. RFC 9000 section 12.3 lets an endpoint bound this state with a
+ * minimum packet number below which everything is dropped; this is that
+ * window. */
+#define WB_QUIC_RECV_MAX 256
+
 typedef struct {
     uint64_t pn;
     uint64_t sent_us;
@@ -83,6 +89,13 @@ typedef struct {
     uint64_t loss_time_us;
     wb_quic_sent sent[WB_QUIC_SPACE_MAX];
     int      n_sent;
+    /* The receive side: the largest number processed, a floor below which
+     * everything is dropped, and the recent numbers for duplicate suppression. */
+    uint64_t largest_recv_pn;
+    int      has_largest_recv;
+    uint64_t min_recv_pn;
+    uint64_t recv[WB_QUIC_RECV_MAX];
+    int      n_recv;
 } wb_quic_space;
 
 /* Start a space with no packets, no RTT estimate and no loss pending. */
@@ -125,6 +138,24 @@ uint64_t wb_quic_space_pto(const wb_quic_space *s, uint64_t max_ack_delay_us,
 /* Whether the next packet number would exceed RFC 9000's 2^62-1 ceiling, which
  * means the connection must close instead of sending it. */
 int wb_quic_space_pn_exhausted(const wb_quic_space *s);
+
+/* Reconstruct a full packet number from its truncated form, RFC 9000
+ * appendix A.3. `largest_pn` is the largest successfully processed number in
+ * this space, or -1 if none has been; `pn_nbits` is 8, 16, 24 or 32. The answer
+ * is the candidate within half a window of `largest_pn + 1`, preferring the one
+ * that does not need a wrap when both are equally close. */
+uint64_t wb_quic_space_decode_pn(uint64_t largest_pn, int has_largest_pn,
+                                 uint64_t truncated_pn, int pn_nbits);
+
+/* Record a received packet number after protection has been removed. Returns 1
+ * if it is new and should be processed, 0 if it is a duplicate or below the
+ * duplicate-suppression floor. */
+int wb_quic_space_receive(wb_quic_space *s, uint64_t pn);
+
+/* The largest received packet number, and the floor below which packets are
+ * dropped without a lookup. */
+uint64_t wb_quic_space_largest_received(const wb_quic_space *s, int *has);
+uint64_t wb_quic_space_min_received(const wb_quic_space *s);
 
 #ifdef __cplusplus
 }
