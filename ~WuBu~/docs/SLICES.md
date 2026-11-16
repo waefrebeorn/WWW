@@ -1,4 +1,4 @@
-# Slices 9–52 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC → QUIC packet protection → the packet number space → the ACK tracker → the connection's three spaces → a packet on the wire → the short header and 1-RTT → the packet number as the receiver sees it → the ACK round trip → the paths joined → a datagram of several packets
+# Slices 9–53 — kernel → meta engine → the gametype host → audio → interpolation → replay → fuzzing → transport → UDP → lockstep → AES-GCM → X25519 → HKDF → the sealed channel → fragmentation → clock sync → QoS → netem → STUN → ICE → TURN → signalling → QUIC → QUIC packet protection → the packet number space → the ACK tracker → the connection's three spaces → a packet on the wire → the short header and 1-RTT → the packet number as the receiver sees it → the ACK round trip → the paths joined → a datagram of several packets → path validation and migration
 
 Status tracker for the roadmap in `docs/meta-engine-assessment.md`.
 The hop-by-hop backlog — 113 pads in dependency order, each with its sources —
@@ -62,12 +62,14 @@ Each slice ships real, tested code; nothing is marked done without a green gate.
 
 | 52 | a datagram of several packets | RFC 9000 section 12.2: walk a datagram into its QUIC packets using the Length field, which is in the clear; a short-header packet has no Length and so is last; packets with different connection IDs must not share a datagram |
 
+| 53 | path validation and migration | RFC 9000 section 8.2, not a separate RFC: PATH_CHALLENGE out, PATH_RESPONSE echoed on the path it arrived, the path validated on a matching response; a challenge in a datagram under 1200 bytes validates the address but not the MTU; failure only on abandonment, after three times the PTO, and losing one of several challenges is not failure |
+
 ## Running totals
 
-`make test` currently: **119 gates, 11174 assertions, 0 fail.**
+`make test` currently: **120 gates, 11225 assertions, 0 fail.**
 
 ECS 21 · SPATIAL 142 · TILES 49 · RENDER 12 · EXP 21 · LV 58 · LV-SCRIPT 14 ·
-PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 33 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 193 · QUICPROTECT 33 · QUICSPACE 128 · QUICACK 64 · QUICCONN 54 · QUICPACKET 61 · QUICSHORT 61 · QUICCOALESCE 49 · AVATAR 32 · MOD 21 ·
+PHYSICS 27 · CHARACTER 29 · GPU 26 · ASSET 30 · NET 28 · NETT 233 · NETUDP 24 · NETLS 845 · AESGCM 33 · X25519 14 · SHA256 21 · NETC 153 · NETFRAG 58 · NETCLOCK 31 · QOS 55 · NETEM 30 · STUN 53 · ICE 71 · TURN 52 · NETSIG 58 · QUIC 193 · QUICPROTECT 33 · QUICSPACE 128 · QUICACK 64 · QUICCONN 54 · QUICPACKET 61 · QUICSHORT 61 · QUICCOALESCE 49 · QUICPATH 51 · AVATAR 32 · MOD 21 ·
 DIST 41 · EDIT 37 · MESH 37 · MODE 48 · SPAWN 37 · WORLDSPACE 53 · PORTAL 22 ·
 SPACE 27 · HOST 82 · WALK 21 · AUDIO 47 · SYNTH 34 · WAV 22 · DSP 24 · OBJECTIVE 48 ·
 HUD 43 · RENDER 20 · WINDOW 16 ·

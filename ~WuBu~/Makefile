@@ -10,6 +10,10 @@ PTHREAD := -static
 # bundled sh.exe (WindowsApps, Smart App Control-blocked) and dies with
 # 'Access is denied' on the first gate. This is environmental, not code.
 SHELL   := C:/Program Files/Git/bin/sh.exe
+# Absolute path on purpose. A bare `mkdir` resolves through PATH, and
+# under `make -j` concurrent spawns intermittently pick the blocked
+# WindowsApps mkdir.exe (e=5, Access is denied).
+MKDIR   := C:/Program Files/Git/usr/bin/mkdir.exe
 LUA_SRC := $(filter-out %/lua.c %/onelua.c %/ltests.c,$(wildcard thirdparty/lua5.4/*.c))
 # Lua 5.4 is compiled once into objects and linked; recompiling 34 files for
 # every gate that needs it was the bulk of the suite's build time.
@@ -18,6 +22,22 @@ LUA_INC := -Ithirdparty/lua5.4
 
 build/lua54_%.o: thirdparty/lua5.4/%.c
 	$(CC) $(CFLAGS) $(LUA_INC) -c $< -o $@
+
+# The QUIC stack and its crypto are each compiled once into an object and
+# linked by every gate that needs them. Before this, wb_quic.c was compiled
+# seven times and the AES/HKDF/SHA trio five times, once per gate.
+OBJDIR := build/obj
+QCRYPTO_OBJ := $(OBJDIR)/core/wb_aes_gcm.o $(OBJDIR)/core/wb_hkdf.o \
+               $(OBJDIR)/core/wb_sha256.o $(OBJDIR)/core/wb_x25519.o
+QNET_OBJ := $(OBJDIR)/net/wb_quic.o $(OBJDIR)/net/wb_quic_protect.o \
+            $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic_space.o \
+            $(OBJDIR)/net/wb_quic_ack.o $(OBJDIR)/net/wb_quic_conn.o \
+            $(OBJDIR)/net/wb_quic_short.o $(OBJDIR)/net/wb_quic_coalesce.o \
+            $(OBJDIR)/net/wb_quic_path.o
+
+
+$(OBJDIR)/%.o: src/%.c | build
+	$(CC) $(CFLAGS) -Isrc/net -c $< -o $@
 # shared kernel: file/hash/error helpers and the glTF accessor layer
 UTIL_SRC  := src/core/wb_util.c
 GLTF_SRC  := src/core/wb_gltf.c
@@ -34,12 +54,12 @@ PLATFORM_SRC := src/platform/wb_win32.c
 OBJ     := build/lua.o build/wb_ecs.o build/wb_host.o
 TARGET  := build/wubu_engine.exe
 
-.PHONY: all clean run test demo
+.PHONY: all clean run test demo build
 
 all: $(TARGET)
 
 build:
-	mkdir -p build
+	$(MKDIR) -p build $(OBJDIR)/core $(OBJDIR)/net
 
 $(TARGET): build $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(PLATFORM_SRC) $(LUA_OBJS) $(WORLDSPACE_SRC)
 	$(CC) $(CFLAGS) -Isrc/lua $(CORE_SRC) $(SCRIPT_SRC) $(HOST_SRC) $(PLATFORM_SRC) $(WORLDSPACE_SRC) $(LUA_OBJS) -o $@ $(LDLIBS) $(PTHREAD)
@@ -63,7 +83,7 @@ run-mode: $(TARGET)
 slice: build
 	$(SHELL) tools/slice.sh
 
-test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-aesgcm test-x25519 test-sha256 test-netc test-netfrag test-netclock test-qos test-netem test-stun test-ice test-turn test-netsig test-quic test-quicprotect test-quicspace test-quicack test-quicconn test-quicpacket test-quicshort test-quiccoalesce test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
+test: test-ecs test-spatial test-tiles test-render test-exp test-lv test-physics test-character test-gpu test-assets test-net test-nett test-netudp test-netls test-aesgcm test-x25519 test-sha256 test-netc test-netfrag test-netclock test-qos test-netem test-stun test-ice test-turn test-netsig test-quic test-quicprotect test-quicspace test-quicack test-quicconn test-quicpacket test-quicshort test-quiccoalesce test-quicpath test-avatar test-mod test-dist test-edit test-mesh test-mode test-spawn test-worldspace test-portal test-space test-host test-walk test-audio test-synth test-wav test-dsp test-objective test-hud test-window test-prof test-det test-snap test-math test-fastmath test-interp test-job test-pool test-access test-atomic test-frame test-hive test-tagheap test-threadheap test-budget test-geom test-meshlet test-lod test-hlod test-galloc test-occl test-bindless test-stream test-material test-compact test-taa test-delta test-snapshot test-history test-rollback test-netmodel test-handoff test-assetgraph test-match test-shadervar test-watch test-cvar test-i18n test-replay test-validate test-cook test-patch test-tls test-eventlog test-social test-catalog test-moderate test-agegate test-ledger test-fed test-resv test-qkey test-addr test-place test-layer test-interest test-travel test-lodchain test-persist test-planets test-quota test-prov test-geolic test-placeval test-heightfield
 # NOTE (environment): this machine's Code Integrity policy blocks the shared
 # libwinpthread-1.dll, so pthread-linked gates must link winpthreads statically
 # (see PTHREAD above). If a gate ever fails with "An Application Control policy
@@ -99,27 +119,30 @@ test-exp: build $(LUA_OBJS)
 test-lv: build
 	$(MAKE) -C src/lv test
 
+# mujoco.dll is shared by every gate that links mujoco. Three targets each
+# copied it inline, which races under `make -j` -- two copies of the same file
+# at once fail on Windows. One file target, built once.
+build/mujoco.dll: thirdparty/mujoco/bin/mujoco.dll
+	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+
 # test-physics: slice 9 -- MuJoCo-backed physics world
 MUJOCO_DIR  := thirdparty/mujoco
 PHYS_SRC    := src/core/wb_physics_world.c src/core/wb_physics_body.c \
                src/core/wb_physics_bind.c
 TEST_PHYSICS := build/wb_physics_test.exe
-test-physics: build
-	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+test-physics: build build/mujoco.dll
 	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c $(PHYS_SRC) tests/wb_physics_test.c -o $(TEST_PHYSICS) -L$(MUJOCO_DIR)/lib -lmujoco -lm
 	./$(TEST_PHYSICS)
 
 # test-character: slice 10 -- input + camera + character controller chain
 TEST_CHAR := build/wb_character_test.exe
-test-character: build
-	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+test-character: build build/mujoco.dll
 	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c $(PHYS_SRC) src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c src/core/wb_character_mj.c tests/wb_character_test.c -o $(TEST_CHAR) -L$(MUJOCO_DIR)/lib -lmujoco -lm
 	./$(TEST_CHAR)
 
 # demo-character: slice 10 headless playable-character demo
 DEMO_CHAR := build/wb_character_demo.exe
-demo-character: build
-	cmd /c copy /Y thirdparty\mujoco\bin\mujoco.dll build\mujoco.dll
+demo-character: build build/mujoco.dll
 	$(CC) $(CFLAGS) -Isrc/core -I$(MUJOCO_DIR)/include src/core/wb_ecs.c $(PHYS_SRC) src/core/wb_input.c src/core/wb_camera.c src/core/wb_character.c examples/wb_character_demo.c -o $(DEMO_CHAR) -L$(MUJOCO_DIR)/lib -lmujoco -lm
 	./$(DEMO_CHAR)
 
@@ -188,22 +211,22 @@ test-netls: build
 # test-aesgcm: LP-70 stone 3 -- AES-256-GCM, the sealed channel's cipher.
 # Vectors are the GCM spec's Appendix B AES-256 cases.
 TEST_AESGCM := build/wb_aes_gcm_test.exe
-test-aesgcm: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_aes_gcm.c tests/wb_aes_gcm_test.c -o $(TEST_AESGCM) -lm
+test-aesgcm: build $(OBJDIR)/core/wb_aes_gcm.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/core/wb_aes_gcm.o tests/wb_aes_gcm_test.c -o $(TEST_AESGCM) -lm
 	./$(TEST_AESGCM)
 
 # test-x25519: LP-70 stone 4 -- the Curve25519 key exchange, against the
 # RFC 7748 single-shot, iterated and Diffie-Hellman vectors.
 TEST_X25519 := build/wb_x25519_test.exe
-test-x25519: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_x25519.c tests/wb_x25519_test.c -o $(TEST_X25519) -lm
+test-x25519: build $(OBJDIR)/core/wb_x25519.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/core/wb_x25519.o tests/wb_x25519_test.c -o $(TEST_X25519) -lm
 	./$(TEST_X25519)
 
 # test-sha256: LP-70 stone 5 -- SHA-256, HMAC-SHA256 and HKDF-SHA256, against
 # the FIPS 180-4 and RFC 5869 vectors.
 TEST_SHA256 := build/wb_sha256_test.exe
-test-sha256: build
-	$(CC) $(CFLAGS) -Isrc/core src/core/wb_sha256.c src/core/wb_hkdf.c tests/wb_sha256_test.c -o $(TEST_SHA256) -lm
+test-sha256: build $(OBJDIR)/core/wb_sha256.o $(OBJDIR)/core/wb_hkdf.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/core/wb_sha256.o $(OBJDIR)/core/wb_hkdf.o tests/wb_sha256_test.c -o $(TEST_SHA256) -lm
 	./$(TEST_SHA256)
 
 # test-netc: LP-70 stone 5 -- the sealed channel over X25519 + HKDF + AES-GCM.
@@ -265,56 +288,62 @@ test-netsig: build
 
 # test-quic: LP-93 stone 1 -- QUIC's varint, packet number codec and long header.
 TEST_QUIC := build/wb_quic_test.exe
-test-quic: build
-	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic.c tests/wb_quic_test.c -o $(TEST_QUIC) -lm
+test-quic: build $(OBJDIR)/net/wb_quic.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic.o tests/wb_quic_test.c -o $(TEST_QUIC) -lm
 	./$(TEST_QUIC)
 
 # test-quicprotect: LP-93 stone 3 -- QUIC packet protection, checked against
 # RFC 9001 appendix A's own sample packets.
 TEST_QUICPROTECT := build/wb_quic_protect_test.exe
-test-quicprotect: build
-	$(CC) $(CFLAGS) -Isrc/net -Isrc/core src/net/wb_quic_protect.c src/core/wb_aes_gcm.c src/core/wb_hkdf.c src/core/wb_sha256.c tests/wb_quic_protect_test.c -o $(TEST_QUICPROTECT) -lm
+test-quicprotect: build $(OBJDIR)/net/wb_quic_protect.o $(QCRYPTO_OBJ)
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_protect.o $(QCRYPTO_OBJ) tests/wb_quic_protect_test.c -o $(TEST_QUICPROTECT) -lm
 	./$(TEST_QUICPROTECT)
 
 # test-quicspace: LP-93 stone 4 -- a packet number space and RFC 9002's loss
 # detection, on an injected clock.
 TEST_QUICSPACE := build/wb_quic_space_test.exe
-test-quicspace: build
-	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic_space.c tests/wb_quic_space_test.c -o $(TEST_QUICSPACE)
+test-quicspace: build $(OBJDIR)/net/wb_quic_space.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_space.o tests/wb_quic_space_test.c -o $(TEST_QUICSPACE)
 	./$(TEST_QUICSPACE)
 
 # test-quicack: LP-93 stone 5 -- the receive side of acknowledgements: when to
 # send an ACK and which ranges go in it.
 TEST_QUICACK := build/wb_quic_ack_test.exe
-test-quicack: build
-	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic_ack.c src/net/wb_quic.c src/net/wb_quic_space.c tests/wb_quic_ack_test.c -o $(TEST_QUICACK) -lm
+test-quicack: build $(OBJDIR)/net/wb_quic_ack.o $(OBJDIR)/net/wb_quic.o $(OBJDIR)/net/wb_quic_space.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_ack.o $(OBJDIR)/net/wb_quic.o $(OBJDIR)/net/wb_quic_space.o tests/wb_quic_ack_test.c -o $(TEST_QUICACK) -lm
 	./$(TEST_QUICACK)
 
 # test-quicconn: LP-93 stone 6 -- the three packet number spaces as one
 # connection, with key install and RFC 9001 section 4.9's discard.
 TEST_QUICCONN := build/wb_quic_conn_test.exe
-test-quicconn: build
-	$(CC) $(CFLAGS) -Isrc/net src/net/wb_quic_conn.c src/net/wb_quic_space.c tests/wb_quic_conn_test.c -o $(TEST_QUICCONN)
+test-quicconn: build $(OBJDIR)/net/wb_quic_conn.o $(OBJDIR)/net/wb_quic_space.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_conn.o $(OBJDIR)/net/wb_quic_space.o tests/wb_quic_conn_test.c -o $(TEST_QUICCONN)
 	./$(TEST_QUICCONN)
 
 # test-quicpacket: LP-93 stone 7 -- a frame composed into a protected packet,
 # checked byte for byte against RFC 9001 appendix A.2.
 TEST_QUICPACKET := build/wb_quic_packet_test.exe
-test-quicpacket: build
-	$(CC) $(CFLAGS) -Isrc/net -Isrc/core src/net/wb_quic_packet.c src/net/wb_quic_protect.c src/net/wb_quic.c src/core/wb_aes_gcm.c src/core/wb_hkdf.c src/core/wb_sha256.c tests/wb_quic_packet_test.c -o $(TEST_QUICPACKET) -lm
+test-quicpacket: build $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ)
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ) tests/wb_quic_packet_test.c -o $(TEST_QUICPACKET) -lm
 	./$(TEST_QUICPACKET)
 
 # test-quicshort: LP-93 stone 8 -- the short header and 1-RTT key update.
 TEST_QUICSHORT := build/wb_quic_short_test.exe
-test-quicshort: build
-	$(CC) $(CFLAGS) -Isrc/net -Isrc/core src/net/wb_quic_short.c src/net/wb_quic_protect.c src/net/wb_quic_packet.c src/net/wb_quic.c src/core/wb_aes_gcm.c src/core/wb_hkdf.c src/core/wb_sha256.c tests/wb_quic_short_test.c -o $(TEST_QUICSHORT) -lm
+test-quicshort: build $(OBJDIR)/net/wb_quic_short.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ)
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_short.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ) tests/wb_quic_short_test.c -o $(TEST_QUICSHORT) -lm
 	./$(TEST_QUICSHORT)
 
 # test-quiccoalesce: LP-93 stone 12 -- splitting a datagram into its packets.
 TEST_QUICCOALESCE := build/wb_quic_coalesce_test.exe
-test-quiccoalesce: build
-	$(CC) $(CFLAGS) -Isrc/net -Isrc/core src/net/wb_quic_coalesce.c src/net/wb_quic_packet.c src/net/wb_quic_short.c src/net/wb_quic_protect.c src/net/wb_quic.c src/core/wb_aes_gcm.c src/core/wb_hkdf.c src/core/wb_sha256.c tests/wb_quic_coalesce_test.c -o $(TEST_QUICCOALESCE) -lm
+test-quiccoalesce: build $(OBJDIR)/net/wb_quic_coalesce.o $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic_short.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ)
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_coalesce.o $(OBJDIR)/net/wb_quic_packet.o $(OBJDIR)/net/wb_quic_short.o $(OBJDIR)/net/wb_quic_protect.o $(OBJDIR)/net/wb_quic.o $(QCRYPTO_OBJ) tests/wb_quic_coalesce_test.c -o $(TEST_QUICCOALESCE) -lm
 	./$(TEST_QUICCOALESCE)
+
+# test-quicpath: LP-93 stone 13 -- path validation and migration (RFC 9000 8.2).
+TEST_QUICPATH := build/wb_quic_path_test.exe
+test-quicpath: build $(OBJDIR)/net/wb_quic_path.o
+	$(CC) $(CFLAGS) -Isrc/net $(OBJDIR)/net/wb_quic_path.o tests/wb_quic_path_test.c -o $(TEST_QUICPATH) -lm
+	./$(TEST_QUICPATH)
 
 # test-avatar: slice 14 -- avatar rig, animation sampling, identity
 TEST_AVATAR := build/wb_avatar_test.exe

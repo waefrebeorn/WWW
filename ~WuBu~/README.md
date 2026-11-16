@@ -13,10 +13,10 @@ Lua never allocates core memory.
 Requires MinGW64 gcc (`mingw32-make`, not `make`).
 
 ```bash
-mkdir -p build          # do this first -- see the Makefile quirk below
-mingw32-make all        # -> build/wubu_engine.exe
-mingw32-make test       # 119 gates, 11174 assertions
-mingw32-make slice      # vertical-slice gate: shipped path + determinism
+mingw32-make -j16 all    # -> build/wubu_engine.exe
+mingw32-make -j16 test   # 120 gates, 11225 assertions, ~11s cold
+mingw32-make test        # the same, serially, ~67s
+mingw32-make slice       # vertical-slice gate: shipped path + determinism
 mingw32-make run        # runs the omniverse-hub gametype (headless)
 mingw32-make play       # the same, in a window, driven by the keyboard
 ./build/wubu_engine.exe games omniverse-hub
@@ -153,6 +153,7 @@ skips its own `mkdir` rule.
 | `src/net/wb_quic_packet.*` | a frame composed into a protected packet, and opened again (LP-93 stone 7) |
 | `src/net/wb_quic_short.*` | the short header, 1-RTT and the mid-connection key update (LP-93 stone 8) |
 | `src/net/wb_quic_coalesce.*` | splitting a datagram into its packets (LP-93 stone 12) |
+| `src/net/wb_quic_path.*` | path validation and migration (LP-93 stone 13) |
 | `tests/` | one harness per module |
 | `games/` | Lua game scripts |
 | `docs/` | design notes + the meta-engine assessment |
